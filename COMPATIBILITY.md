@@ -25,7 +25,10 @@ runtime API.
 - Synchronous serializers by top-level key.
 - `stdSerializers.err` and `stdSerializers.errWithCause`.
 - Structured error serialization with `type`, `message`, `stack`, and `cause`.
-- Redaction subset: dot paths, censor string, censor function, and `remove`.
+- Redaction: dot paths, wildcards (`a.*`, `*.b`, `a.*.c`), array and bracket access (`a[0]`,
+  `a[*]`), quoted keys (`a["x.y"]`), censor string, the `(value, path[]) => unknown` censor function
+  (path is an array of string segments, as in Pino), and `remove`. `level` and `time` are never
+  redacted, matching Pino.
 - `formatters.level`, `formatters.bindings`, and `formatters.log`.
 - `mixin` and `mixinMergeStrategy`.
 - `hooks.logMethod`.
@@ -40,7 +43,6 @@ runtime API.
 
 ## Planned
 
-- Full fast-redact path syntax.
 - Destination parity with Pino internals.
 - `transport`.
 - `multistream`.
@@ -60,6 +62,9 @@ runtime API.
   inherited custom-level methods keep working. Pino 10.3.1 instead replaces the child level set,
   which makes inherited custom-level methods emit a broken `undefined,...` line; Pequi does not
   reproduce that bug.
+- Redaction paths are matched at log time rather than compiled and validated up front, so Pequi is
+  more lenient than `fast-redact`: paths that Pino would reject at construction may simply match
+  nothing in Pequi. Output for valid paths is identical.
 
 ## Test Oracle Permissions
 

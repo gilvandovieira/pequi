@@ -47,16 +47,24 @@ read, so they silently no-op. They are now real.
 - Acceptance met: factory, `useOnlyCustomLevels`, `DESC`, and child fixtures match the oracle
   (`tests/compat/custom-levels.test.ts`, `tests/unit/custom-levels.test.ts`).
 
-### Phase C3 — Redaction Parity
+### Phase C3 — Redaction Parity — Shipped
 
-Today only literal dot paths redact; `*.secret` and bracket syntax pass through untouched.
+Previously only literal dot paths redacted; `*.secret` and bracket syntax passed through untouched.
 
-- Wildcard segments: leading (`*.secret`), terminal (`user.*`), and intermediate.
-- Bracket and array path syntax (`a[*].b`, `a[0].b`).
-- Multiple paths targeting the same subtree, and `remove` plus `censor` interactions.
-- Decide between extending the current walker and adopting fast-redact path semantics.
-- Acceptance: a redaction fixture set covering wildcard, bracket, and array paths matches the
-  oracle.
+- Done: `src/redaction.ts` adds `parsePath`, supporting wildcards (leading `*.secret`, terminal
+  `user.*`, intermediate `a.*.c`), array/bracket access (`a[0]`, `a[*]`), and quoted keys
+  (`a["x.y"]`).
+- Done: the censor function receives the resolved path as an array of string segments, matching
+  Pino; `remove` and the default `"[Redacted]"` censor are preserved.
+- Done: `level` and `time` are immune to redaction (even an explicit path or a root `*`), matching
+  Pino's prefix handling.
+- Done: paths are parsed once at construction (stored on `LoggerState`) instead of per log.
+- Bonus: dropped the redundant per-log deep clone (redaction now mutates the already-private
+  serialized record), which fixed a latent bug where redaction flattened `Date` values to `{}` and
+  cut redaction overhead by roughly a third (top-level 2.12x to 1.43x of Pino, nested 1.68x to
+  1.19x).
+- Acceptance met: wildcard, bracket, array, `remove`, and censor-path fixtures match the oracle
+  (`tests/compat/redaction.test.ts`, `tests/unit/redaction.test.ts`).
 
 ### Phase C4 — Formatting and Serializer Parity
 

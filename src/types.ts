@@ -50,7 +50,7 @@ export type Serializers = Record<string, Serializer>;
 
 export interface RedactOptions {
   paths: string[];
-  censor?: string | ((value: unknown, path: string) => unknown);
+  censor?: string | ((value: unknown, path: string[]) => unknown);
   remove?: boolean;
 }
 

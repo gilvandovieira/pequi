@@ -12,7 +12,7 @@ import {
   type LevelRegistry,
   pinoLevels,
 } from "./levels.ts";
-import { redactRecord } from "./redaction.ts";
+import { type NormalizedRedact, normalizeRedact, redactRecord } from "./redaction.ts";
 import {
   applySerializers,
   errSerializer,
@@ -29,7 +29,6 @@ import type {
   LogLevel,
   LogMethod,
   MixinMergeStrategy,
-  RedactConfig,
   Serializers,
   TimestampOption,
 } from "./types.ts";
@@ -71,7 +70,7 @@ interface LoggerState {
   baseFields: Record<string, unknown>;
   bindings: Record<string, unknown>;
   serializers: Serializers;
-  redact?: RedactConfig;
+  redact?: NormalizedRedact;
   timestamp?: TimestampOption;
   messageKey: string;
   errorKey: string;
@@ -140,7 +139,7 @@ function pequiFactory(
       base: options.base,
     }),
     serializers: createSerializers(options.serializers, options.errorKey ?? "err"),
-    redact: options.redact,
+    redact: normalizeRedact(options.redact),
     timestamp: options.timestamp,
     messageKey: options.messageKey ?? "msg",
     errorKey: options.errorKey ?? "err",
@@ -215,7 +214,7 @@ function createLogger(state: LoggerState): Logger {
           options.errorKey ?? state.errorKey,
           state.serializers,
         ),
-        redact: options.redact ?? state.redact,
+        redact: options.redact !== undefined ? normalizeRedact(options.redact) : state.redact,
         timestamp: options.timestamp ?? state.timestamp,
         messageKey: options.messageKey ?? state.messageKey,
         errorKey: options.errorKey ?? state.errorKey,

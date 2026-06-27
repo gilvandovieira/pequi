@@ -2,102 +2,166 @@ import type { RedactConfig, RedactOptions } from "./types.ts";
 
 export const DEFAULT_CENSOR = "[Redacted]";
 
-interface NormalizedRedactOptions {
-  paths: string[];
-  censor: string | ((value: unknown, path: string) => unknown);
+export type Censor = string | ((value: unknown, path: string[]) => unknown);
+
+export interface NormalizedRedact {
+  /** Each path pre-parsed into segments; `"*"` is the wildcard segment. */
+  paths: string[][];
+  censor: Censor;
   remove: boolean;
 }
 
-export function normalizeRedact(
-  config: RedactConfig | undefined,
-): NormalizedRedactOptions | undefined {
+// `level` and `time` are written by Pino as a literal prefix and are never redacted, even by an
+// explicit path or a root wildcard.
+const IMMUTABLE_ROOT_KEYS = new Set(["level", "time"]);
+
+export function normalizeRedact(config: RedactConfig | undefined): NormalizedRedact | undefined {
   if (config === undefined || config === false) {
     return undefined;
   }
 
-  if (Array.isArray(config)) {
-    return { paths: config, censor: DEFAULT_CENSOR, remove: false };
+  const raw = Array.isArray(config)
+    ? { paths: config, censor: DEFAULT_CENSOR as Censor, remove: false }
+    : {
+      paths: config.paths,
+      censor: config.censor ?? DEFAULT_CENSOR,
+      remove: config.remove ?? false,
+    };
+
+  if (raw.paths.length === 0) {
+    return undefined;
   }
 
   return {
-    paths: config.paths,
-    censor: config.censor ?? DEFAULT_CENSOR,
-    remove: config.remove ?? false,
+    paths: raw.paths.map(parsePath),
+    censor: raw.censor,
+    remove: raw.remove,
   };
 }
 
+/**
+ * Redacts in place. The caller (`buildRecord`) passes a record that has already been deep-copied by
+ * the serializer pass, so mutating it here never touches the user's logged objects.
+ */
 export function redactRecord(
   record: Record<string, unknown>,
-  config: RedactConfig | undefined,
+  redact: NormalizedRedact | undefined,
 ): Record<string, unknown> {
-  const normalized = normalizeRedact(config);
-  if (normalized === undefined || normalized.paths.length === 0) {
+  if (redact === undefined) {
     return record;
   }
 
-  const next = cloneRecord(record);
-  for (const path of normalized.paths) {
-    redactPath(next, path, normalized);
+  for (const segments of redact.paths) {
+    applyRedaction(record, segments, 0, [], redact);
   }
-  return next;
+  return record;
 }
 
-function redactPath(
-  record: Record<string, unknown>,
-  path: string,
-  options: NormalizedRedactOptions,
-): void {
-  const parts = path.split(".").filter(Boolean);
-  if (parts.length === 0) {
-    return;
-  }
+/**
+ * Splits a redaction path into segments, supporting dot paths (`a.b`), array/bracket access
+ * (`a[0]`, `a[*]`), quoted keys with dots (`a["x.y"]`), and wildcards (`*`, `a.*`, `*.b`).
+ */
+export function parsePath(path: string): string[] {
+  const segments: string[] = [];
+  let current = "";
+  let index = 0;
 
-  let target: unknown = record;
-  for (const part of parts.slice(0, -1)) {
-    if (!isRecord(target)) {
-      return;
+  const flush = () => {
+    if (current.length > 0) {
+      segments.push(current);
+      current = "";
     }
-    target = target[part];
+  };
+
+  while (index < path.length) {
+    const char = path[index];
+    if (char === ".") {
+      flush();
+      index++;
+    } else if (char === "[") {
+      flush();
+      index++;
+      const quote = path[index];
+      if (quote === '"' || quote === "'") {
+        index++;
+        let key = "";
+        while (index < path.length && path[index] !== quote) {
+          key += path[index];
+          index++;
+        }
+        index++; // closing quote
+        while (index < path.length && path[index] !== "]") {
+          index++;
+        }
+        index++; // closing bracket
+        segments.push(key);
+      } else {
+        let inner = "";
+        while (index < path.length && path[index] !== "]") {
+          inner += path[index];
+          index++;
+        }
+        index++; // closing bracket
+        segments.push(inner);
+      }
+    } else {
+      current += char;
+      index++;
+    }
   }
 
-  const last = parts.at(-1)!;
-  if (!isRecord(target) || !Object.hasOwn(target, last)) {
+  flush();
+  return segments;
+}
+
+function applyRedaction(
+  target: unknown,
+  segments: string[],
+  index: number,
+  trail: string[],
+  redact: NormalizedRedact,
+): void {
+  if (typeof target !== "object" || target === null) {
     return;
   }
 
-  if (options.remove) {
-    delete target[last];
+  const container = target as Record<string, unknown>;
+  const segment = segments[index];
+  const isLast = index === segments.length - 1;
+  const keys = segment === "*"
+    ? Object.keys(container)
+    : Object.hasOwn(container, segment)
+    ? [segment]
+    : [];
+
+  for (const key of keys) {
+    const nextTrail = [...trail, key];
+    if (isLast) {
+      if (nextTrail.length === 1 && IMMUTABLE_ROOT_KEYS.has(key)) {
+        continue;
+      }
+      redactKey(container, key, nextTrail, redact);
+    } else {
+      applyRedaction(container[key], segments, index + 1, nextTrail, redact);
+    }
+  }
+}
+
+function redactKey(
+  container: Record<string, unknown>,
+  key: string,
+  trail: string[],
+  redact: NormalizedRedact,
+): void {
+  if (redact.remove) {
+    delete container[key];
     return;
   }
 
-  const current = target[last];
-  target[last] = typeof options.censor === "function"
-    ? options.censor(current, path)
-    : options.censor;
-}
-
-function cloneRecord(record: Record<string, unknown>): Record<string, unknown> {
-  const next: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(record)) {
-    next[key] = cloneValue(value);
-  }
-  return next;
-}
-
-function cloneValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(cloneValue);
-  }
-
-  if (isRecord(value)) {
-    return cloneRecord(value);
-  }
-
-  return value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  const current = container[key];
+  container[key] = typeof redact.censor === "function"
+    ? redact.censor(current, trail)
+    : redact.censor;
 }
 
 export type { RedactOptions };
