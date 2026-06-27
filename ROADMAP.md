@@ -66,24 +66,48 @@ Previously only literal dot paths redacted; `*.secret` and bracket syntax passed
 - Acceptance met: wildcard, bracket, array, `remove`, and censor-path fixtures match the oracle
   (`tests/compat/redaction.test.ts`, `tests/unit/redaction.test.ts`).
 
-### Phase C4 — Formatting and Serializer Parity
+### Phase C4 — Formatting and Serializer Parity — Formatting shipped
 
-- Extend `formatMessage` to Node `util.format` tokens `%i`, `%f`, and `%c`, plus missing- and
-  extra-argument edge cases.
-- Complete `stdSerializers.req` and `stdSerializers.res`.
-- Add the wildcard serializer key (`*`) and the request/response serializer wrappers.
-- Acceptance: expanded message-argument and serializer fixtures match the oracle.
+Pino formats with `quick-format-unescaped`, not Node `util.format`, so the token rules differ from
+the original plan (`%c` is not a token; leftover args are dropped, not appended).
 
-### Phase C5 — Output Sinks and Advanced Options
+- Done: `formatMessage` (`src/format.ts`) is a char scanner matching `quick-format-unescaped`: `%s`,
+  `%d`/`%f` (`Number`), `%i` (`Math.floor`), `%j`/`%o`/`%O` (circular-safe via
+  `safeStableStringify`), `%%`; `%c` and unknown tokens stay literal; leftover arguments are
+  dropped.
+- Done: this also closed part of the perf gap (single-placeholder format 2.54x to 1.63x of Pino) and
+  fixed a corrected non-Pino test that asserted leftover args were appended.
+- Acceptance met for formatting: token and argument-count fixtures match the oracle
+  (`tests/compat/message-arguments.test.ts`, `tests/unit/format.test.ts`).
 
-The loud "not implemented" surface. Lowest priority because failures are explicit today.
+Remaining (deferred):
 
-- `transport`: either a Deno-native worker model or a documented intentional difference.
-- `multistream`: fan-out to multiple destinations with per-stream levels.
-- Destination parity: `sync`, `minLength`, and flush-on-exit semantics.
-- `browser` option behavior.
-- Full `onChild` semantics beyond the current single callback.
-- Acceptance: documented behavior with tests where a Deno-equivalent exists.
+- The wildcard serializer key (`*`) is inert in Pino 10.3.1, so it is intentionally not implemented
+  (documented in COMPATIBILITY.md) rather than diverging.
+- `stdSerializers.req`/`res` need real Node `http` request/response fixtures for faithful parity
+  (plain mocks yield `statusCode: null`), so they stay in Planned for a focused HTTP-serializer
+  pass.
+
+### Phase C5 — Output Sinks and Advanced Options — multistream and onChild shipped
+
+The loud "not implemented" surface. The two items with a clean Deno equivalent are done; the rest
+are Node-specific and stay documented differences.
+
+- Done: `src/multistream.ts` provides `multistream` (also `pequi.multistream`) with per-stream level
+  filtering and `dedupe`. The level value is plumbed from the log method through `Backend.write` and
+  the sink, which sets `lastLevel` on the destination, mirroring Pino.
+- Done: `onChild` is now a root option fired for every descendant child (`src/logger.ts`), not just
+  a per-`child()` callback.
+- Acceptance met: `tests/unit/multistream.test.ts` and `tests/unit/onchild.test.ts` match the
+  behavior verified against Pino (broadcast, `dedupe`, default stream level, descendant firing).
+
+Remaining (deferred / intentional differences):
+
+- `transport`: Pino's Node worker-thread model is outside the Deno-first core; `pequi.transport`
+  throws a clear error (documented in COMPATIBILITY.md) rather than emulating it.
+- `browser`: accepted but not implemented; Pino's browser console mode is out of scope.
+- Destination `sync`/`minLength`/flush-on-exit: SonicBoom internals are not copied; revisit if a
+  Deno-native buffering story is needed.
 
 ### Out of Scope
 
@@ -127,7 +151,18 @@ Carried over from `COMPATIBILITY.md` and not planned for the compatibility layer
 - Native integration tests.
 - Native writer benchmarks.
 
-## v0.4 — Linux ARM64 Release Hardening
+## v0.4 — Native Integration and Benchmark Hardening
+
+- Native backend resolver.
+- Native fallback diagnostics.
+- Pure/native equivalence tests.
+- Native lifecycle tests.
+- Native file flush tests.
+- Native benchmark suite.
+- Benchmark regression baseline.
+- Regression threshold script.
+
+## v0.5 — Linux ARM64 Release Hardening
 
 - `linux-aarch64-gnu` release build.
 - CI matrix.
@@ -135,14 +170,14 @@ Carried over from `COMPATIBILITY.md` and not planned for the compatibility layer
 - Release artifact validation.
 - Memory stability tests.
 
-## v0.5 — Buffered Writer Tuning
+## v0.6 — Native Buffering Tuning
 
 - Tune default buffer sizing per destination.
 - Measure stdout, stderr, file, and discard overhead separately.
 - Add long-running flush and drop stress tests.
 - Keep disabled-level logging entirely TypeScript.
 
-## v0.6 — Encoder Decision
+## v0.7 — Encoder Decision
 
 - Benchmark TypeScript `JSON.stringify` plus Rust sink.
 - Benchmark possible Rust batch encoding.

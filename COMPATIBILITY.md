@@ -17,6 +17,9 @@ runtime API.
 - `useOnlyCustomLevels` (drops the core methods and requires the active level to be custom).
 - `levelComparison` as `"ASC"`, `"DESC"`, and a custom `(candidate, active) => boolean` comparator.
 - Common log argument forms, including format strings, object plus message, and Error plus message.
+- Message format tokens following Pino's `quick-format-unescaped`: `%s`, `%d`/`%f` (`Number`), `%i`
+  (`Math.floor`), `%j`/`%o`/`%O` (circular-safe JSON), and `%%`. `%c` and unknown tokens stay
+  literal, and leftover arguments are dropped rather than appended.
 - Child loggers, nested child bindings, independent child level mutation, and child `msgPrefix`.
 - `bindings()` and `setBindings()`.
 - `enabled: false`.
@@ -33,6 +36,9 @@ runtime API.
 - `mixin` and `mixinMergeStrategy`.
 - `hooks.logMethod`.
 - Minimal `destination()` helper and Pino-style write destinations.
+- `multistream` fan-out to multiple destinations, each filtered by its own level, including
+  `dedupe`.
+- `onChild` as a root option that fires for every descendant child, matching Pino.
 - Circular-safe JSON encoding: circular references render as `"[Circular]"` instead of throwing,
   preserving insertion order to match Pino's line output.
 - `BigInt` (numeric literal), non-finite numbers (`null`), `toJSON`, and dropped
@@ -40,22 +46,24 @@ runtime API.
 - Opt-in `depthLimit` and `edgeLimit` truncation using `safe-stable-stringify` tokens (`"[Object]"`,
   `"[Array]"`, and `"N items not stringified"`); both default to no limit, matching Pino's
   observable output.
+- Native backend selection (`native: false`, `native: "auto"`, and `native: "required"`) does not
+  change logger API semantics. Compatibility is regression-tested against pure TypeScript and the
+  Rust native writer where native is available.
 
 ## Planned
 
-- Destination parity with Pino internals.
-- `transport`.
-- `multistream`.
-- Complete `stdSerializers.req` and `stdSerializers.res`.
-- Exact Node `util.format` parity for less common placeholders.
-- Full `onChild` behavior.
+- Destination parity with Pino internals (`sync`, `minLength`, flush-on-exit).
+- `stdSerializers.req` and `stdSerializers.res` (deferred: their output is tightly coupled to Node's
+  `http` request/response internals, so faithful parity needs real
+  `IncomingMessage`/`ServerResponse` fixtures rather than plain objects).
 
 ## Intentionally Different
 
 - Pino's Node worker transport model is not part of Pequi core.
 - Pino destination internals based on SonicBoom are not copied.
 - Node-only runtime details may differ under Deno.
-- The Rust native backend is outside this compatibility layer and is not part of this task.
+- The Rust native backend does not own Pino compatibility. It receives already encoded JSON lines
+  from TypeScript and must produce equivalent output to the pure TypeScript backend.
 - The `safe` option is accepted but inert: Pequi is always circular-safe, matching the observable
   behavior of Pino 10.3.1 where `safe: false` still does not throw on circular references.
 - When a child adds its own `customLevels`, Pequi merges them with the parent's custom levels so
@@ -65,6 +73,14 @@ runtime API.
 - Redaction paths are matched at log time rather than compiled and validated up front, so Pequi is
   more lenient than `fast-redact`: paths that Pino would reject at construction may simply match
   nothing in Pequi. Output for valid paths is identical.
+- Message formatting follows Pino's `quick-format-unescaped`, not Node's `util.format`: `%c` is not
+  a token and leftover arguments are dropped instead of appended.
+- The wildcard serializer key (`*`) is not implemented because it is inert in Pino 10.3.1, where a
+  `*` serializer has no effect on the logged object.
+- `transport` is not implemented: `pequi.transport` throws a clear error rather than spawning Pino's
+  Node worker-thread transport, which is outside the Deno-first core.
+- The `browser` option is accepted but not implemented; Pino's browser console mode is out of scope
+  for the Deno-first core.
 
 ## Test Oracle Permissions
 

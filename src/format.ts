@@ -49,35 +49,59 @@ export function normalizeLogArguments(
   return withMessage(formatMessage(String(objOrMsg), messageArgs), options);
 }
 
+/**
+ * Mirrors Pino's `quick-format-unescaped` rather than Node's `util.format`: `%i` floors,
+ * `%d`/`%f` coerce with `Number`, `%j`/`%o`/`%O` JSON-encode (circular-safe), `%c` and unknown
+ * tokens stay literal, and leftover arguments are dropped instead of appended.
+ */
 export function formatMessage(template: string, args: unknown[]): string {
   if (args.length === 0) {
     return template;
   }
 
+  let result = "";
+  let argIndex = 0;
   let index = 0;
-  const formatted = template.replace(/%([sdjoO%])/g, (match, token: string) => {
-    if (token === "%") {
-      return "%";
-    }
 
-    if (index >= args.length) {
-      return match;
+  while (index < template.length) {
+    if (template[index] === "%" && index + 1 < template.length) {
+      const token = template[index + 1];
+      if (token === "%") {
+        result += "%";
+        index += 2;
+        continue;
+      }
+      if (argIndex < args.length && isFormatToken(token)) {
+        result += formatToken(token, args[argIndex]);
+        argIndex++;
+        index += 2;
+        continue;
+      }
     }
+    result += template[index];
+    index++;
+  }
 
-    const value = args[index++];
-    if (token === "d") {
+  return result;
+}
+
+function isFormatToken(token: string): boolean {
+  return token === "s" || token === "d" || token === "i" || token === "f" ||
+    token === "j" || token === "o" || token === "O";
+}
+
+function formatToken(token: string, value: unknown): string {
+  switch (token) {
+    case "s":
+      return String(value);
+    case "d":
+    case "f":
       return Number(value).toString();
-    }
-
-    if (token === "j" || token === "o" || token === "O") {
-      return stringifyMessageArg(value);
-    }
-
-    return String(value);
-  });
-
-  const rest = args.slice(index).map(stringifyMessageArg);
-  return rest.length === 0 ? formatted : `${formatted} ${rest.join(" ")}`;
+    case "i":
+      return Math.floor(Number(value)).toString();
+    default: // "j", "o", "O"
+      return safeStableStringify(value);
+  }
 }
 
 export function formatJsonLine(
@@ -115,22 +139,6 @@ function applyNestedKey(
   }
 
   return { [nestedKey]: object };
-}
-
-function stringifyMessageArg(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (isError(value)) {
-    return value.message;
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "[Circular]";
-  }
 }
 
 function isLogObject(value: unknown): value is Record<string, unknown> {

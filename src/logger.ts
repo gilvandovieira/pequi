@@ -12,6 +12,7 @@ import {
   type LevelRegistry,
   pinoLevels,
 } from "./levels.ts";
+import { multistream } from "./multistream.ts";
 import { type NormalizedRedact, normalizeRedact, redactRecord } from "./redaction.ts";
 import {
   applySerializers,
@@ -82,8 +83,13 @@ interface LoggerState {
   mixinMergeStrategy?: MixinMergeStrategy;
   lineEnding: "\n" | "\r\n";
   encode: EncodeOptions;
+  onChild?: (child: Logger) => void;
   events: EventRegistry;
 }
+
+type LoggerOptionsWithNativeOverrides = LoggerOptions & {
+  nativeLibraryPath?: string;
+};
 
 type EventListener = (...args: unknown[]) => void;
 type EventRegistry = Map<string, Set<EventListener>>;
@@ -94,7 +100,7 @@ export interface PequiFactory {
   (options: LoggerOptions, destination: Destination): Logger;
   destination: typeof createDestination;
   transport: () => never;
-  multistream: () => never;
+  multistream: typeof multistream;
   stdSerializers: typeof stdSerializers;
   stdTimeFunctions: typeof stdTimeFunctions;
   symbols: typeof symbols;
@@ -110,11 +116,13 @@ function pequiFactory(
     optionsOrDestination,
     maybeDestination,
   );
+  const nativeLibraryPath = (options as LoggerOptionsWithNativeOverrides).nativeLibraryPath;
   const lineEnding = options.crlf === true ? "\r\n" : "\n";
   const backend = createBackend({
     native: options.native,
     destination,
     lineEnding,
+    nativeLibraryPath,
   });
 
   const levelRegistry = buildLevelRegistry({
@@ -151,6 +159,7 @@ function pequiFactory(
     mixinMergeStrategy: options.mixinMergeStrategy,
     lineEnding,
     encode: { depthLimit: options.depthLimit, edgeLimit: options.edgeLimit },
+    onChild: options.onChild,
     events: new Map(),
   });
 }
@@ -158,7 +167,7 @@ function pequiFactory(
 export const pequi = Object.assign(pequiFactory, {
   destination: createDestination,
   transport: notImplemented("transport"),
-  multistream: notImplemented("multistream"),
+  multistream,
   stdSerializers,
   stdTimeFunctions,
   symbols,
@@ -229,10 +238,13 @@ function createLogger(state: LoggerState): Logger {
           depthLimit: options.depthLimit ?? state.encode.depthLimit,
           edgeLimit: options.edgeLimit ?? state.encode.edgeLimit,
         },
+        onChild: options.onChild ?? state.onChild,
         events: new Map(),
       };
       const child = createLogger(childState);
-      options.onChild?.(child);
+      // Pino's `onChild` fires for every descendant; the child inherits the hook so its own
+      // children fire it too.
+      childState.onChild?.(child);
       return child;
     },
     bindings(): Record<string, unknown> {
@@ -337,7 +349,7 @@ function createLogMethod(state: LoggerState, level: string): LogMethod {
       ...nextArgs: unknown[]
     ) => {
       const record = buildRecord(state, level, nextObjOrMsg, nextMsg, nextArgs);
-      state.backend.write(formatJsonLine(record, state.encode));
+      state.backend.write(formatJsonLine(record, state.encode), state.levels.valueOf(level));
     };
 
     if (state.hooks?.logMethod !== undefined) {

@@ -24,12 +24,20 @@
   "tasks": {
     "check": "deno check mod.ts tests/**/*.ts bench/**/*.ts scripts/**/*.ts",
     "test": "deno test --allow-read --allow-write --allow-env=NODE_V8_COVERAGE --allow-sys=hostname",
-    "test:native": "deno test --allow-read --allow-write --allow-ffi tests/integration/native-*.test.ts",
+    "test:native": "deno test --allow-read --allow-write --allow-ffi tests/integration/native-*.test.ts tests/regression/*native*.test.ts",
     "bench": "deno bench --allow-read --allow-write bench/**/*.bench.ts",
     "bench:compare": "deno bench --allow-read --allow-write bench/compare/**/*.bench.ts",
     "bench:compare:native": "deno bench --allow-read --allow-write --allow-ffi bench/compare/**/*.bench.ts",
     "bench:report": "deno run --allow-read --allow-write scripts/bench-report.ts",
-    "bench:native": "deno bench --allow-read --allow-write --allow-ffi bench/**/*.bench.ts",
+    "bench:native": "deno bench --allow-read --allow-write --allow-ffi bench/native/**/*.bench.ts",
+    "bench:native:compare": "deno run --allow-read --allow-write --allow-run scripts/bench-native.ts --compare --json --output bench/reports/native-current.json",
+    "bench:regression": "deno run --allow-read scripts/assert-regression.ts bench/regression/baseline.json bench/reports/native-current.json",
+    "bundle": "deno run --allow-read --allow-write --allow-run scripts/build-bundle.ts",
+    "bench:bundle": "deno run --allow-read --allow-write bench/bundle/runner.ts --variant all --output bench/reports/bundle-comparison-current.json",
+    "bench:bundle:native": "deno run --allow-read --allow-write --allow-ffi bench/bundle/runner.ts --variant all --output bench/reports/bundle-native-current.json",
+    "bench:bundle:investigate": "deno run --allow-read --allow-write --allow-run --allow-ffi scripts/run-bundle-investigation.ts",
+    "bench:bundle:compare": "deno run --allow-read --allow-write scripts/compare-bundle-results.ts bench/reports/bundle-comparison-current.json",
+    "bench:bundle:regression": "deno run --allow-read --allow-write scripts/assert-bundle-regression.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
     "native:build": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts",
@@ -37,7 +45,8 @@
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.14",
-    "pino": "npm:pino@10.3.1"
+    "pino": "npm:pino@10.3.1",
+    "rolldown": "npm:rolldown@1.1.2"
   },
   "compilerOptions": {
     "strict": true

@@ -338,6 +338,8 @@ fn copy_error_message(message: Option<&str>, out_ptr: *mut u8, out_len: usize) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn abi_version_is_one() {
@@ -357,6 +359,52 @@ mod tests {
     }
 
     #[test]
+    fn file_sink_writes_and_flushes() {
+        let path = temp_log_path("file-sink-writes");
+        let path_bytes = path.as_bytes();
+        let handle = pequi_init(3, path_bytes.as_ptr(), path_bytes.len(), 128);
+        assert!(!handle.is_null());
+
+        let first = b"{\"level\":30,\"msg\":\"one\"}\n";
+        let second = b"{\"level\":30,\"msg\":\"two\"}\n";
+
+        assert_eq!(pequi_write(handle, first.as_ptr(), first.len()), STATUS_OK);
+        assert_eq!(
+            pequi_write(handle, second.as_ptr(), second.len()),
+            STATUS_OK
+        );
+        assert_eq!(pequi_flush(handle), STATUS_OK);
+        pequi_drop(handle);
+
+        let text = fs::read_to_string(&path).expect("log file is readable");
+        assert_eq!(
+            text,
+            "{\"level\":30,\"msg\":\"one\"}\n{\"level\":30,\"msg\":\"two\"}\n"
+        );
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn zero_length_write_is_a_successful_noop() {
+        let handle = pequi_init(0, ptr::null::<u8>(), 0, 0);
+        assert!(!handle.is_null());
+
+        assert_eq!(pequi_write(handle, ptr::null::<u8>(), 0), STATUS_OK);
+
+        pequi_drop(handle);
+    }
+
+    #[test]
+    fn null_handle_reports_stable_code() {
+        assert_eq!(
+            pequi_write(ptr::null_mut(), ptr::null::<u8>(), 0),
+            STATUS_NULL_HANDLE
+        );
+        assert_eq!(pequi_flush(ptr::null_mut()), STATUS_NULL_HANDLE);
+    }
+
+    #[test]
     fn null_bytes_pointer_reports_stable_code() {
         let handle = pequi_init(0, ptr::null::<u8>(), 0, 0);
         assert!(!handle.is_null());
@@ -365,6 +413,9 @@ mod tests {
             pequi_write(handle, ptr::null::<u8>(), 1),
             STATUS_NULL_BYTES_POINTER
         );
+
+        let message = handle_last_error(handle);
+        assert!(message.contains("null bytes pointer"));
 
         pequi_drop(handle);
     }
@@ -379,5 +430,56 @@ mod tests {
         let message = str::from_utf8(&buffer[..len]).expect("valid error message");
 
         assert!(message.contains("invalid destination kind"));
+    }
+
+    #[test]
+    fn invalid_path_sets_global_error() {
+        let handle = pequi_init(3, ptr::null::<u8>(), 0, 0);
+        assert!(handle.is_null());
+
+        let message = global_last_error();
+        assert!(message.contains("non-empty UTF-8 path"));
+    }
+
+    #[test]
+    fn invalid_utf8_path_sets_global_error() {
+        let path = [0xff_u8, 0xfe_u8];
+        let handle = pequi_init(3, path.as_ptr(), path.len(), 0);
+        assert!(handle.is_null());
+
+        let message = global_last_error();
+        assert!(!message.is_empty());
+    }
+
+    #[test]
+    fn drop_null_is_noop() {
+        pequi_drop(ptr::null_mut());
+    }
+
+    fn handle_last_error(handle: *mut PequiHandle) -> String {
+        let mut buffer = [0_u8; 256];
+        let len = pequi_last_error(handle, buffer.as_mut_ptr(), buffer.len());
+        str::from_utf8(&buffer[..len])
+            .expect("valid handle error")
+            .to_string()
+    }
+
+    fn global_last_error() -> String {
+        let mut buffer = [0_u8; 256];
+        let len = pequi_last_error_global(buffer.as_mut_ptr(), buffer.len());
+        str::from_utf8(&buffer[..len])
+            .expect("valid global error")
+            .to_string()
+    }
+
+    fn temp_log_path(label: &str) -> String {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time moved forward")
+            .as_nanos();
+        std::env::temp_dir()
+            .join(format!("pequi-{label}-{}-{stamp}.log", std::process::id()))
+            .to_string_lossy()
+            .into_owned()
     }
 }

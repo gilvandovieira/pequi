@@ -4,6 +4,20 @@ export type LogLevel = CoreLogLevel | "silent" | string;
 
 export type NativeMode = false | "auto" | "required";
 
+export interface NativeDiagnostics {
+  requestedMode: NativeMode;
+  selectedBackend: "pure" | "native";
+  fallbackReason?: string;
+  os: typeof Deno.build.os;
+  arch: typeof Deno.build.arch;
+  attemptedLibraryPaths: string[];
+  abiVersionFound?: number;
+  abiVersionExpected: number;
+  dlopenFailed: boolean;
+  initFailed: boolean;
+  nativeErrorMessage?: string;
+}
+
 export type DestinationType = "stdout" | "stderr" | "file" | "memory" | "discard";
 
 export interface WritableDestination {
@@ -118,7 +132,7 @@ export interface LoggerOptions {
 }
 
 export interface Backend {
-  write(line: string): void;
+  write(line: string, level?: number): void;
   flush(): void | Promise<void>;
   close(): void | Promise<void>;
 }

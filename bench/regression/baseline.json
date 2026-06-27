@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "updatedAt": null,
+  "thresholds": {
+    "disabled-level": {
+      "maxRegressionPercent": 10,
+      "hard": true
+    },
+    "format-only": {
+      "maxRegressionPercent": 15,
+      "hard": true
+    },
+    "native-burst-file": {
+      "maxRegressionPercent": 20,
+      "hard": true
+    },
+    "pure-vs-native": {
+      "maxRegressionPercent": 20,
+      "hard": false
+    },
+    "memory": {
+      "maxRegressionPercent": 50,
+      "hard": false
+    },
+    "default": {
+      "maxRegressionPercent": 20,
+      "hard": false
+    }
+  },
+  "benchmarks": {}
+}

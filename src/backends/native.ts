@@ -1,6 +1,6 @@
 import { isConfiguredDestination } from "../destination.ts";
-import { NativeBackendUnavailable } from "../errors.ts";
-import type { Backend, Destination, NativeMode } from "../types.ts";
+import { NativeBackendUnavailable, PequiNativeError } from "../errors.ts";
+import type { Backend, Destination, NativeDiagnostics, NativeMode } from "../types.ts";
 
 export const NATIVE_ABI_VERSION = 1;
 
@@ -52,6 +52,11 @@ export interface LoadedNativeLibrary extends NativeLoadInfo {
   library: NativeLibrary;
   libraryPath: string;
   abiVersion: number;
+}
+
+export interface NativeBackendCreation {
+  backend: Backend;
+  diagnostics: NativeDiagnostics;
 }
 
 interface NativeDestination {
@@ -124,15 +129,21 @@ export function getNativeLoadInfo(libraryPath?: string): NativeLoadInfo {
   };
 }
 
-export function loadNativeLibrary(libraryPath?: string): LoadedNativeLibrary {
+export function loadNativeLibrary(
+  libraryPath?: string,
+  requestedMode: NativeMode = "required",
+): LoadedNativeLibrary {
   const loadInfo = getNativeLoadInfo(libraryPath);
   const failures: string[] = [];
   let lastCause: Error | undefined;
+  let dlopenFailed = false;
+  let abiVersionFound: number | undefined;
 
   if (loadInfo.attemptedLibraryPaths.length === 0) {
     throw nativeStartupError(
       `No native backend target is available for ${Deno.build.os}/${Deno.build.arch}.`,
       loadInfo,
+      requestedMode,
     );
   }
 
@@ -141,6 +152,7 @@ export function loadNativeLibrary(libraryPath?: string): LoadedNativeLibrary {
     try {
       library = Deno.dlopen(attemptedPath, nativeSymbols);
     } catch (cause) {
+      dlopenFailed = true;
       lastCause = cause instanceof Error ? cause : undefined;
       failures.push(`${attemptedPath}: ${errorMessage(cause)}`);
       continue;
@@ -149,6 +161,7 @@ export function loadNativeLibrary(libraryPath?: string): LoadedNativeLibrary {
     let abiVersion: number;
     try {
       abiVersion = Number(library.symbols.pequi_abi_version());
+      abiVersionFound = abiVersion;
     } catch (cause) {
       library.close();
       lastCause = cause instanceof Error ? cause : undefined;
@@ -176,7 +189,13 @@ export function loadNativeLibrary(libraryPath?: string): LoadedNativeLibrary {
   throw nativeStartupError(
     `Unable to load native backend.\nFailures:\n${failures.join("\n")}`,
     loadInfo,
+    requestedMode,
     lastCause,
+    {
+      abiVersionFound,
+      dlopenFailed,
+      nativeErrorMessage: failures.join("\n"),
+    },
   );
 }
 
@@ -193,10 +212,17 @@ export function tryCreateNativeBackend(options: NativeBackendOptions = {}): Back
 }
 
 export function createNativeBackend(options: NativeBackendOptions = {}): Backend {
+  return createNativeBackendResult(options).backend;
+}
+
+export function createNativeBackendResult(
+  options: NativeBackendOptions = {},
+): NativeBackendCreation {
+  const requestedMode = options.mode ?? "required";
   const loadInfo = getNativeLoadInfo(options.libraryPath);
-  const destination = resolveNativeDestination(options.destination, loadInfo);
-  const bufferSize = normalizeBufferSize(options.bufferSize, loadInfo);
-  const loaded = loadNativeLibrary(options.libraryPath);
+  const destination = resolveNativeDestination(options.destination, loadInfo, requestedMode);
+  const bufferSize = normalizeBufferSize(options.bufferSize, loadInfo, requestedMode);
+  const loaded = loadNativeLibrary(options.libraryPath, requestedMode);
 
   let handle: NativeHandle;
   try {
@@ -211,7 +237,13 @@ export function createNativeBackend(options: NativeBackendOptions = {}): Backend
     throw nativeStartupError(
       `Native backend initialization failed before returning a handle: ${errorMessage(cause)}`,
       loaded,
+      requestedMode,
       cause instanceof Error ? cause : undefined,
+      {
+        abiVersionFound: loaded.abiVersion,
+        initFailed: true,
+        nativeErrorMessage: errorMessage(cause),
+      },
     );
   }
 
@@ -221,19 +253,42 @@ export function createNativeBackend(options: NativeBackendOptions = {}): Backend
     throw nativeStartupError(
       `Native backend initialization failed: ${nativeError}`,
       loaded,
+      requestedMode,
+      undefined,
+      {
+        abiVersionFound: loaded.abiVersion,
+        initFailed: true,
+        nativeErrorMessage: nativeError,
+      },
     );
   }
 
-  return new NativeBackend(
-    loaded.library,
-    handle,
-    options.lineEnding ?? "\n",
-  );
+  const diagnostics = createNativeDiagnostics(loaded, requestedMode, {
+    selectedBackend: "native",
+    abiVersionFound: loaded.abiVersion,
+  });
+
+  return {
+    backend: new NativeBackend(
+      loaded.library,
+      handle,
+      options.lineEnding ?? "\n",
+      destination.kind,
+      loaded.libraryPath,
+      diagnostics,
+    ),
+    diagnostics,
+  };
+}
+
+export function isNativeBackend(backend: Backend): boolean {
+  return backend instanceof NativeBackend;
 }
 
 function resolveNativeDestination(
   destination: Destination | undefined,
   loadInfo: NativeLoadInfo,
+  requestedMode: NativeMode,
 ): NativeDestination {
   if (destination === undefined) {
     return { kind: 1, pathBytes: emptyBuffer };
@@ -244,6 +299,11 @@ function resolveNativeDestination(
       "The native backend supports configured destinations only; custom writable " +
         "destinations use the pure TypeScript backend.",
       loadInfo,
+      requestedMode,
+      undefined,
+      {
+        nativeErrorMessage: "custom writable destination is not supported by native",
+      },
     );
   }
 
@@ -261,6 +321,9 @@ function resolveNativeDestination(
         "The native backend does not support the memory destination; use native: false " +
           "or native: auto fallback for memory capture.",
         loadInfo,
+        requestedMode,
+        undefined,
+        { nativeErrorMessage: "memory destination is not supported by native" },
       );
   }
 }
@@ -268,6 +331,7 @@ function resolveNativeDestination(
 function normalizeBufferSize(
   bufferSize: number | undefined,
   loadInfo: NativeLoadInfo,
+  requestedMode: NativeMode,
 ): number {
   if (bufferSize === undefined) {
     return 0;
@@ -277,30 +341,50 @@ function normalizeBufferSize(
     throw nativeStartupError(
       `Invalid native buffer size: ${bufferSize}. Expected a non-negative safe integer.`,
       loadInfo,
+      requestedMode,
+      undefined,
+      { nativeErrorMessage: "invalid native buffer size" },
     );
   }
 
   return bufferSize;
 }
 
-class NativeBackend implements Backend {
+export class NativeBackend implements Backend {
   readonly #library: NativeLibrary;
   readonly #handle: NativeHandle;
   readonly #lineEnding: "\n" | "\r\n";
+  readonly #destinationKind: number;
+  readonly #libraryPath: string;
+  readonly #diagnostics: NativeDiagnostics;
   #closed = false;
 
   constructor(
     library: NativeLibrary,
     handle: NativeHandle,
     lineEnding: "\n" | "\r\n",
+    destinationKind: number,
+    libraryPath: string,
+    diagnostics: NativeDiagnostics,
   ) {
     this.#library = library;
     this.#handle = handle;
     this.#lineEnding = lineEnding;
+    this.#destinationKind = destinationKind;
+    this.#libraryPath = libraryPath;
+    this.#diagnostics = diagnostics;
+  }
+
+  get diagnostics(): NativeDiagnostics {
+    return this.#diagnostics;
+  }
+
+  get destinationKind(): number {
+    return this.#destinationKind;
   }
 
   write(line: string): void {
-    this.#assertOpen();
+    this.#assertOpen("write");
     const bytes = encoder.encode(`${line}${this.#lineEnding}`);
     const code = this.#library.symbols.pequi_write(
       this.#handle,
@@ -311,7 +395,7 @@ class NativeBackend implements Backend {
   }
 
   flush(): void {
-    this.#assertOpen();
+    this.#assertOpen("flush");
     const code = this.#library.symbols.pequi_flush(this.#handle);
     this.#assertNativeOk(code, "flush");
   }
@@ -329,9 +413,16 @@ class NativeBackend implements Backend {
     }
   }
 
-  #assertOpen(): void {
+  #assertOpen(operation: string): void {
     if (this.#closed) {
-      throw new NativeBackendUnavailable("Native backend is already closed.");
+      throw new PequiNativeError(
+        `Native backend ${operation} failed: native backend is already closed.`,
+        {
+          operation,
+          destinationKind: this.#destinationKind,
+          diagnostics: this.#diagnostics,
+        },
+      );
     }
   }
 
@@ -340,9 +431,25 @@ class NativeBackend implements Backend {
       return;
     }
 
-    throw new NativeBackendUnavailable(
-      `Native backend ${operation} failed with status ${code} (${nativeStatusName(code)}): ` +
-        this.#lastErrorMessage(),
+    const lastError = this.#lastErrorMessage();
+    throw new PequiNativeError(
+      [
+        `Native backend ${operation} failed with status ${code} (${nativeStatusName(code)}).`,
+        `native last error: ${lastError}`,
+        `destination kind: ${this.#destinationKind}`,
+        `operating system: ${this.#diagnostics.os}`,
+        `architecture: ${this.#diagnostics.arch}`,
+        `attempted library path: ${this.#libraryPath}`,
+      ].join("\n"),
+      {
+        statusCode: code,
+        operation,
+        destinationKind: this.#destinationKind,
+        diagnostics: {
+          ...this.#diagnostics,
+          nativeErrorMessage: lastError,
+        },
+      },
     );
   }
 
@@ -389,11 +496,17 @@ function resolveRustTargetTriple(): string | undefined {
 function nativeStartupError(
   message: string,
   loadInfo: NativeLoadInfo,
+  requestedMode: NativeMode,
   cause?: Error,
+  overrides: Partial<NativeDiagnostics> = {},
 ): NativeBackendUnavailable {
   const attemptedLibraryPath = loadInfo.attemptedLibraryPaths.length === 0
     ? "none"
     : loadInfo.attemptedLibraryPaths.join(", ");
+  const diagnostics = createNativeDiagnostics(loadInfo, requestedMode, {
+    selectedBackend: "native",
+    ...overrides,
+  });
 
   return new NativeBackendUnavailable(
     [
@@ -403,8 +516,28 @@ function nativeStartupError(
       `attempted library path: ${attemptedLibraryPath}`,
       "--allow-ffi may be missing: Deno FFI requires --allow-ffi to load native libraries.",
     ].join("\n"),
-    { cause },
+    { cause, diagnostics },
   );
+}
+
+function createNativeDiagnostics(
+  loadInfo: NativeLoadInfo,
+  requestedMode: NativeMode,
+  overrides: Partial<NativeDiagnostics> = {},
+): NativeDiagnostics {
+  return {
+    requestedMode,
+    selectedBackend: overrides.selectedBackend ?? "native",
+    fallbackReason: overrides.fallbackReason,
+    os: loadInfo.os,
+    arch: loadInfo.arch,
+    attemptedLibraryPaths: loadInfo.attemptedLibraryPaths,
+    abiVersionFound: overrides.abiVersionFound,
+    abiVersionExpected: NATIVE_ABI_VERSION,
+    dlopenFailed: overrides.dlopenFailed ?? false,
+    initFailed: overrides.initFailed ?? false,
+    nativeErrorMessage: overrides.nativeErrorMessage,
+  };
 }
 
 function nativeStatusName(code: number): string {

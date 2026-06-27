@@ -26,8 +26,24 @@ export {
 export { copyBindings, createBaseBindings, mergeBindings } from "./src/bindings.ts";
 export { formatJsonLine, formatMessage, normalizeLogArguments } from "./src/format.ts";
 export { type EncodeOptions, safeStableStringify } from "./src/encode.ts";
-export { createBackend, type CreateBackendOptions } from "./src/backend.ts";
-export { NativeBackendUnavailable, PequiError, UnsupportedDestinationError } from "./src/errors.ts";
+export {
+  multistream,
+  type MultiStreamDestination,
+  type MultistreamEntry,
+  type MultistreamOptions,
+} from "./src/multistream.ts";
+export {
+  type BackendResolution,
+  createBackend,
+  type CreateBackendOptions,
+  resolveBackend,
+} from "./src/backend.ts";
+export {
+  NativeBackendUnavailable,
+  PequiError,
+  PequiNativeError,
+  UnsupportedDestinationError,
+} from "./src/errors.ts";
 export type {
   Backend,
   ConfiguredDestination,
@@ -39,6 +55,7 @@ export type {
   LogLevel,
   LogMethod,
   MemoryDestination,
+  NativeDiagnostics,
   NativeMode,
   RedactConfig,
   Serializer,

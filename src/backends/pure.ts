@@ -15,8 +15,8 @@ export class PureBackend implements Backend {
     this.#lineEnding = options.lineEnding ?? "\n";
   }
 
-  write(line: string): void {
-    this.#sink.write(`${line}${this.#lineEnding}`);
+  write(line: string, level?: number): void {
+    this.#sink.write(`${line}${this.#lineEnding}`, level);
   }
 
   flush(): void {

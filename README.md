@@ -97,7 +97,32 @@ Native modes:
 - `native: "auto"` tries Rust and falls back to pure TypeScript.
 - `native: "required"` fails if Rust cannot load.
 
-Deno FFI requires `--allow-ffi`; normal TypeScript usage and tests do not.
+Deno FFI requires `--allow-ffi`; normal TypeScript usage and tests do not. Pure TypeScript remains
+the default fallback and native is not mandatory for Pequi usage.
+
+```ts
+const pure = pequi({ native: false });
+const optionalNative = pequi({ native: "auto" });
+const requiredNative = pequi({ native: "required" });
+```
+
+Build and check the Rust backend locally:
+
+```sh
+deno task native:build
+deno task native:check
+```
+
+Run native-specific tests and benchmarks:
+
+```sh
+deno task test:native
+deno task bench:native
+deno task bench:native:compare
+```
+
+The native backend accelerates only write/flush sink work today. TypeScript still owns Pino
+compatibility and JSON encoding.
 
 ## Development
 

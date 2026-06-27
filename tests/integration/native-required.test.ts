@@ -1,4 +1,4 @@
-import { assertStringIncludes, assertThrows } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import { discardDestination } from "../../mod.ts";
 import { NativeBackendUnavailable } from "../../src/errors.ts";
 import { createNativeBackend, tryCreateNativeBackend } from "../../src/backends/native.ts";
@@ -20,6 +20,8 @@ Deno.test("native required mode fails clearly when library cannot load", () => {
   assertStringIncludes(error.message, Deno.build.arch);
   assertStringIncludes(error.message, missingPath);
   assertStringIncludes(error.message, "--allow-ffi may be missing");
+  const diagnostics = error.diagnostics as { attemptedLibraryPaths?: string[] } | undefined;
+  assertEquals(diagnostics?.attemptedLibraryPaths, [missingPath]);
 });
 
 Deno.test("native required mode succeeds when native is available", () => {

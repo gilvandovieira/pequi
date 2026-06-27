@@ -74,12 +74,38 @@ JSON line encoding.
 Disabled-level logging remains entirely TypeScript and should not call native code. Native is not
 expected to improve that benchmark.
 
-`bench/compare/native-writer.bench.ts` measures already formatted JSON line writes through the pure
-TypeScript writer and the optional Rust writer. It includes single-line writes, 1,000-line bursts,
-10,000-line bursts, flush-after-burst cases, and file sink bursts. The Pino reference remains a
-comparable Deno sink/logger reference, not an already-encoded writer API.
+`bench/native/` measures already formatted JSON line writes, file writes, burst logging, flush
+costs, Pequi pure vs native logger paths, and Pequi native vs Pino under Deno. The Pino reference is
+a comparable Deno sink/logger reference, not an already-encoded writer API.
 
 Interpret native wins by workload. FFI overhead can dominate tiny one-line discard writes, while the
 native writer is expected to matter more for burst logging, buffered file writes, stdout/stderr
 writes, and high-volume backend workloads. Rust JSON encoding is a future decision and is not part
 of the current benchmark.
+
+Run native benchmarks with:
+
+```sh
+deno task bench:native
+```
+
+Collect native comparison JSON for regression checks with:
+
+```sh
+deno task bench:native:compare
+```
+
+Update the baseline with:
+
+```sh
+deno run --allow-read --allow-write --allow-run scripts/update-baseline.ts \
+  bench/reports/native-current.json bench/regression/baseline.json
+```
+
+Regression checks compare matching benchmark names from `bench/regression/baseline.json` and
+`bench/reports/native-current.json`. Tiny noise should not fail CI: disabled-level benchmarks use a
+10% hard threshold, format-only benchmarks use 15%, and native burst/file benchmarks use 20% once a
+baseline exists. Pure-vs-native integration and memory/RSS results are informational at first.
+
+Do not overinterpret microbenchmarks. A one-line discard benchmark can mostly measure FFI overhead;
+burst and file benchmarks are the better signal for the current native writer.

@@ -7,7 +7,7 @@ import type {
 } from "./types.ts";
 
 export interface DestinationSink {
-  write(chunk: string): void;
+  write(chunk: string, level?: number): void;
   flush(): void | Promise<void>;
   close(): void | Promise<void>;
 }
@@ -96,7 +96,11 @@ class WritableSink implements DestinationSink {
     this.#destination = destination;
   }
 
-  write(chunk: string): void {
+  write(chunk: string, level?: number): void {
+    // Mirror Pino: expose the line's level on the destination so a multistream can route it.
+    if (level !== undefined) {
+      (this.#destination as { lastLevel?: number }).lastLevel = level;
+    }
     this.#destination.write(chunk);
   }
 
