@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="./assets/pequi-banner.png" alt="Pequi" width="480" />
+</p>
+
+<p align="center">
+  <a href="https://gilvandovieira.github.io/pequi/">Landing page &amp; benchmarks</a>
+</p>
+
 # Pequi
 
 Pequi is a Deno-first structured logger distributed as `@pequi/log`. It provides a Pino-compatible

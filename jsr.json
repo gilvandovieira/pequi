@@ -16,6 +16,7 @@
       "dist/pequi.bundle.js.map",
       "dist/pequi.bundle.d.ts",
       "prebuilt/**",
+      "assets/pequi-banner.png",
       "README.md",
       "BENCHMARKS.md",
       "COMPATIBILITY.md",
