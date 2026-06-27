@@ -1126,7 +1126,7 @@ function cloneContainer(container) {
 
 //#endregion
 //#region src/logger.ts
-const version = "0.7.0";
+const version = "0.8.0";
 const symbols = {
 	serializers: Symbol.for("pino.serializers"),
 	serializersSym: Symbol.for("pino.serializers")

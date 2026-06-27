@@ -112,6 +112,11 @@ burst and file benchmarks are the better signal for the current native writer.
 
 ## Interpreting Native Benchmarks
 
+> **Native benchmark results are platform-specific.** Linux x64 native benchmarks do not prove Linux
+> ARM64 or Windows x64 performance — the OS, libc, allocator, and syscall costs all differ. Each
+> target needs its own runtime benchmark on matching hardware before any performance claim is made
+> for it. See `NATIVE.md` for which targets are cross-buildable versus runtime-tested.
+
 Native FFI has per-call overhead. The Rust writer can lose on discard and memory microbenchmarks
 because those workloads mostly measure the boundary crossing and TypeScript's per-line setup, not
 real I/O.

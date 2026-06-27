@@ -1,6 +1,6 @@
 {
   "name": "@pequi/log",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -46,10 +46,16 @@
     "bench:bundle:investigate": "deno run --allow-read --allow-write --allow-run --allow-ffi scripts/run-bundle-investigation.ts",
     "bench:bundle:compare": "deno run --allow-read --allow-write scripts/compare-bundle-results.ts bench/reports/bundle-current.json",
     "bench:bundle:regression": "deno run --allow-read --allow-write scripts/assert-bundle-regression.ts",
+    "bench:smoke": "deno run --allow-read --allow-write --allow-env --allow-sys --allow-ffi scripts/bench-smoke.ts",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
     "lint": "deno lint",
     "native:build": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts",
+    "native:build:x64": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts --target linux-x86_64-gnu",
+    "native:build:aarch64": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts --target linux-aarch64-gnu",
+    "native:build:windows": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts --target windows-x86_64-gnu",
+    "native:build:all": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts --all",
+    "native:verify:artifacts": "deno run --allow-read scripts/verify-native-artifacts.ts",
     "native:check": "deno run --allow-read --allow-ffi scripts/check-native.ts"
   },
   "imports": {

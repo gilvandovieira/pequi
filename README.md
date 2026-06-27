@@ -120,6 +120,18 @@ const optionalNative = pequi({ native: "auto" });
 const requiredNative = pequi({ native: "required" });
 ```
 
+### Native targets
+
+Pequi's native Rust backend currently builds artifacts for:
+
+- Linux x64
+- Linux ARM64
+- Windows x64 GNU
+
+Native remains optional and pure TypeScript remains the default fallback. Cross-built artifacts are
+not claimed as fully runtime-tested until they run on a matching OS/architecture. See
+[NATIVE.md](./NATIVE.md) for the cross-compilation, build, and verification details.
+
 Build and check the Rust backend locally:
 
 ```sh

@@ -54,9 +54,19 @@ CI (`.github/workflows/ci.yml`) gates every push and pull request on correctness
 1. `deno fmt --check`
 2. `deno task lint`
 3. `deno task check`
-4. `deno task test` — includes bundle semantic-equivalence, type-export, and import smoke tests. The
-   pure suite runs without `--allow-ffi`, so native tests skip cleanly.
-5. `deno task bundle:verify` — the **freshness gate**.
+4. `deno task test` — source tests plus bundle semantic-equivalence, type-export, and import smoke
+   tests. The pure suite runs without `--allow-ffi`, so native tests skip cleanly here.
+5. `deno task test:native` — **native tests where available**. The ubuntu-x86_64 runner ships the
+   committed prebuilt `.so`, so the Rust sink loads via FFI and its lifecycle/equivalence tests run
+   for real.
+6. `deno task native:verify:artifacts` — **artifact shape gate** (not a runtime test). Confirms each
+   present prebuilt artifact has the expected name, folder, extension, and architecture metadata;
+   missing cross artifacts are tolerated. See NATIVE.md "What verification means".
+7. `deno task bundle:verify` — the **freshness gate**.
+8. `deno task bench:smoke` — **benchmark smoke**. Runs every bundle/source/native/Pino variant at a
+   tiny iteration count and asserts each ran and passed its correctness gate
+   (`scripts/bench-smoke.ts`), so a crashed benchmark fails the build. It is a smoke test, not a
+   measurement — timings are discarded.
 
 ### Freshness gate
 
