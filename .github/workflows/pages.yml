@@ -1,0 +1,49 @@
+name: Pages
+
+# Deploy the static landing page (index.html + assets) to GitHub Pages. Only the site files are
+# published — not the whole repository. One-time setup: Settings → Pages → Source → "GitHub Actions".
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - assets/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; let an in-progress deploy finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Assemble a minimal site directory: the page, the images it references, and .nojekyll so
+      # Pages serves the files as-is. The full-resolution source image is intentionally excluded.
+      - name: Assemble site
+        run: |
+          mkdir -p _site/assets
+          cp index.html _site/
+          cp assets/pequi-banner.png assets/pequi-mark.png assets/favicon.png _site/assets/
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
