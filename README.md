@@ -100,6 +100,20 @@ Native modes:
 Deno FFI requires `--allow-ffi`; normal TypeScript usage and tests do not. Pure TypeScript remains
 the default fallback and native is not mandatory for Pequi usage.
 
+### When to use it
+
+Rarely — native only accelerates the write/flush path, not formatting or serialization. Reach for it
+only when **all** of these hold: you log **high volume to a file**, you can ship the prebuilt Rust
+`.so` and grant `--allow-ffi`, and **buffered writes are acceptable** (file destinations buffer by
+default since v0.7, flushing on `flush()`/drop). Measured file bursts run ~1.9× faster than pure at
+1,000 lines, narrowing to ~1.1× at 100,000.
+
+Stay on the default pure TypeScript backend for stdout/stderr, discard/memory/network sinks,
+per-line or low-volume logging, serverless/edge, or anywhere you can't ship a native binary — native
+was ~52% slower in those discard micro-workloads, where there's no buffer to amortize the FFI
+crossing. If you do depend on the native win, use `native: "required"` so a missing library fails
+loudly instead of silently falling back to pure. See `NATIVE.md` for the full guide.
+
 ```ts
 const pure = pequi({ native: false });
 const optionalNative = pequi({ native: "auto" });

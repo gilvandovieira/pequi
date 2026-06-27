@@ -303,6 +303,23 @@ Acceptance criteria:
 - Native fallback cannot be mistaken for native performance.
 - `BENCHMARKS.md` explains why native may lose on per-line discard benchmarks.
 
+Status — shipped:
+
+- Root cause: the native backend defaulted to `bufferSize: 0` (unbuffered), so a file destination
+  paid the FFI crossing **and** a syscall per line — strictly worse than the pure TypeScript file
+  sink. The win the `bench/native` suite showed (which passes a 64 KiB buffer explicitly) never
+  reached real callers or the bundle runner.
+- Fix: file destinations now default to a 64 KiB buffer (`DEFAULT_FILE_BUFFER_SIZE`,
+  `src/backends/native.ts`); stdout/stderr stay unbuffered for interactivity; discard ignores
+  buffering. The buffer is still overridable via `nativeBufferSize`.
+- Judged (median of 9, burst-then-flush, default config): native file writes are now **0.54× of
+  pure** at 1,000 lines (~1.9× faster), narrowing to ~0.9× at 100,000 as the page cache absorbs
+  pure's extra syscalls. Native still loses on per-line discard/memory (FFI overhead, no buffer to
+  amortize) — documented in `BENCHMARKS.md`, not treated as native evidence.
+- Existing `bench/native/*` (file, burst, flush) and the 19 native integration/equivalence tests
+  cover the file-burst, flush-after-burst, correctness, and pure-vs-native-output deliverables; the
+  Rust writer already buffers and flushes on drop.
+
 ## v0.8 — Bundle And Native Release Hardening
 
 Goal: prepare source, bundle, and native paths for publishing and release.

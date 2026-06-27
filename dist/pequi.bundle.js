@@ -318,7 +318,7 @@ function createNativeBackendResult(options = {}) {
 	const requestedMode = options.mode ?? "required";
 	const loadInfo = getNativeLoadInfo(options.libraryPath);
 	const destination = resolveNativeDestination(options.destination, loadInfo, requestedMode);
-	const bufferSize = normalizeBufferSize(options.bufferSize, loadInfo, requestedMode);
+	const bufferSize = normalizeBufferSize(options.bufferSize, loadInfo, requestedMode, destination.kind);
 	const loaded = loadNativeLibrary(options.libraryPath, requestedMode);
 	let handle;
 	try {
@@ -375,8 +375,10 @@ function resolveNativeDestination(destination, loadInfo, requestedMode) {
 		case "memory": throw nativeStartupError("The native backend does not support the memory destination; use native: false or native: auto fallback for memory capture.", loadInfo, requestedMode, void 0, { nativeErrorMessage: "memory destination is not supported by native" });
 	}
 }
-function normalizeBufferSize(bufferSize, loadInfo, requestedMode) {
-	if (bufferSize === void 0) return 0;
+const DEFAULT_FILE_BUFFER_SIZE = 65536;
+const FILE_DESTINATION_KIND = 3;
+function normalizeBufferSize(bufferSize, loadInfo, requestedMode, destinationKind) {
+	if (bufferSize === void 0) return destinationKind === FILE_DESTINATION_KIND ? DEFAULT_FILE_BUFFER_SIZE : 0;
 	if (!Number.isSafeInteger(bufferSize) || bufferSize < 0) throw nativeStartupError(`Invalid native buffer size: ${bufferSize}. Expected a non-negative safe integer.`, loadInfo, requestedMode, void 0, { nativeErrorMessage: "invalid native buffer size" });
 	return bufferSize;
 }
@@ -1124,7 +1126,7 @@ function cloneContainer(container) {
 
 //#endregion
 //#region src/logger.ts
-const version = "0.5.0";
+const version = "0.7.0";
 const symbols = {
 	serializers: Symbol.for("pino.serializers"),
 	serializersSym: Symbol.for("pino.serializers")

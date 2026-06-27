@@ -221,7 +221,12 @@ export function createNativeBackendResult(
   const requestedMode = options.mode ?? "required";
   const loadInfo = getNativeLoadInfo(options.libraryPath);
   const destination = resolveNativeDestination(options.destination, loadInfo, requestedMode);
-  const bufferSize = normalizeBufferSize(options.bufferSize, loadInfo, requestedMode);
+  const bufferSize = normalizeBufferSize(
+    options.bufferSize,
+    loadInfo,
+    requestedMode,
+    destination.kind,
+  );
   const loaded = loadNativeLibrary(options.libraryPath, requestedMode);
 
   let handle: NativeHandle;
@@ -328,13 +333,21 @@ function resolveNativeDestination(
   }
 }
 
+// 64 KiB holds several hundred log lines before a syscall, which is where the Rust BufWriter pays
+// for the per-write FFI crossing. The file destination kind is 3 (see the Rust `init_inner`).
+const DEFAULT_FILE_BUFFER_SIZE = 65_536;
+const FILE_DESTINATION_KIND = 3;
+
 function normalizeBufferSize(
   bufferSize: number | undefined,
   loadInfo: NativeLoadInfo,
   requestedMode: NativeMode,
+  destinationKind: number,
 ): number {
   if (bufferSize === undefined) {
-    return 0;
+    // Buffer file writes by default so native batches syscalls (its real I/O win). stdout/stderr
+    // stay unbuffered for interactivity; discard ignores buffering anyway.
+    return destinationKind === FILE_DESTINATION_KIND ? DEFAULT_FILE_BUFFER_SIZE : 0;
   }
 
   if (!Number.isSafeInteger(bufferSize) || bufferSize < 0) {

@@ -458,6 +458,117 @@
         color: var(--faint);
       }
 
+      /* simplified use-case view */
+      .usecases {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 28px;
+      }
+      @media (max-width: 860px) {
+        .usecases {
+          grid-template-columns: 1fr;
+        }
+      }
+      .uc {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .uc h4 {
+        margin: 0;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+      }
+      .uc .uc-code {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: #9ece6a;
+        background: #0a0b0e;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 11px;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .uc .badge {
+        align-self: flex-start;
+        font-size: 12.5px;
+        font-weight: 700;
+        padding: 4px 11px;
+        border-radius: 999px;
+      }
+      .uc .badge.win {
+        background: #5ec98a1f;
+        color: var(--green);
+        border: 1px solid #5ec98a40;
+      }
+      .uc .badge.lose {
+        background: var(--bg-soft);
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      .ucbars {
+        display: grid;
+        gap: 6px;
+      }
+      .ucbar {
+        display: grid;
+        grid-template-columns: 42px 1fr 86px;
+        gap: 9px;
+        align-items: center;
+        font-size: 11.5px;
+        font-family: var(--mono);
+      }
+      .ucbar .lbl {
+        color: var(--muted);
+      }
+      .ucbar .track2 {
+        height: 13px;
+        background: #0a0b0e;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        overflow: hidden;
+      }
+      .ucbar .fill {
+        height: 100%;
+        border-radius: 4px;
+      }
+      .ucbar.pq .fill {
+        background: linear-gradient(90deg, #f6b73c, #f6cd6e);
+      }
+      .ucbar.pn .fill {
+        background: #444a57;
+      }
+      .ucbar .val {
+        color: var(--muted);
+        text-align: right;
+      }
+      .uc p.take {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .bottomline {
+        margin-top: 22px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--amber);
+        border-radius: 12px;
+        padding: 18px 20px;
+        color: var(--ink);
+        font-size: 15px;
+        line-height: 1.6;
+      }
+      .bottomline b {
+        color: var(--amber);
+      }
+
       table.data {
         width: 100%;
         border-collapse: collapse;
@@ -675,52 +786,141 @@ log.info({ big: 10n })
     <section id="benchmarks">
       <div class="wrap">
         <h2>Benchmarks</h2>
-        <h3>Benchmarked against Pino — with the tradeoffs visible.</h3>
+        <h3>How fast is it, really?</h3>
         <p class="lead">
-          Throughput in <strong>million ops/sec</strong> (higher is better), mean of 3 independent
-          runs · 20,000 iterations/case · discard sink · 12th-gen i7-12700H · Deno 2.8.3 / V8
-          14.9. After the v0.6 hot-path optimization Pequi is <strong>faster than Pino</strong> on
-          object-heavy and high-volume logging (serializer, redaction, child bindings, mixin,
-          bursts), at parity on several, and behind on the lightweight string and disabled-level
-          micro-paths.
+          Most apps log a few common ways. Here is how Pequi compares to Pino on each — measured
+          (mean of 3 runs, million log lines per second, higher is better). Where Pino wins, we say
+          so.
         </p>
 
         <div class="bctrl">
-          <div class="seg" role="group" aria-label="Pequi variant">
-            <button data-v="src" aria-pressed="true">Source (TS)</button>
-            <button data-v="bun" aria-pressed="false">Bundled (Rolldown)</button>
-            <button data-v="natS" aria-pressed="false">Native (Rust)</button>
+          <div class="seg" role="group" aria-label="Benchmark view">
+            <button data-view="simple" aria-pressed="true">Common use cases</button>
+            <button data-view="full" aria-pressed="false">Full data</button>
           </div>
           <div class="legend">
             <span><i class="pq"></i>Pequi</span><span><i class="pn"></i>Pino 10.3.1</span>
           </div>
         </div>
-        <p class="note" id="variant-note"></p>
-        <div class="bars" id="bars"></div>
-        <p class="note">
-          Bars are normalized per row to the faster of the two. Verdict = Pequi vs Pino for the
-          selected variant. “par” = within ±10% (under the ~15% measurement-noise floor).
-        </p>
 
-        <table class="data" id="full">
-          <thead>
-            <tr>
-              <th>Case (M ops/sec)</th>
-              <th>Source</th>
-              <th>Bundled</th>
-              <th>Min*</th>
-              <th>Native</th>
-              <th>Pino</th>
-              <th>noise</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <p class="note">
-          * <strong>Minified is experimental</strong> and not recommended — shown for reference
-          only, never treated as a product variant. Native targets file/buffered I/O; it is slower
-          than source on these discard-sink microbenchmarks by design.
-        </p>
+        <!-- Simplified default view -->
+        <div id="bench-simple">
+          <div class="usecases">
+            <div class="uc">
+              <h4>Logging structured data</h4>
+              <div class="uc-code">log.info({ userId, route }, "request")</div>
+              <span class="badge win">Pequi ≈ 1.3× faster</span>
+              <div class="ucbars">
+                <div class="ucbar pq">
+                  <span class="lbl">Pequi</span>
+                  <div class="track2"><div class="fill" style="width: 100%"></div></div>
+                  <span class="val">2.7M/s</span>
+                </div>
+                <div class="ucbar pn">
+                  <span class="lbl">Pino</span>
+                  <div class="track2"><div class="fill" style="width: 77%"></div></div>
+                  <span class="val">2.1M/s</span>
+                </div>
+              </div>
+              <p class="take">
+                The everyday pattern — attaching fields to a message. Pequi's copy-on-write
+                serializer keeps this cheap.
+              </p>
+            </div>
+
+            <div class="uc">
+              <h4>High-volume logging</h4>
+              <div class="uc-code">for (...) log.info(event)</div>
+              <span class="badge win">Pequi ≈ 1.5× faster</span>
+              <div class="ucbars">
+                <div class="ucbar pq">
+                  <span class="lbl">Pequi</span>
+                  <div class="track2"><div class="fill" style="width: 100%"></div></div>
+                  <span class="val">3.1M/s</span>
+                </div>
+                <div class="ucbar pn">
+                  <span class="lbl">Pino</span>
+                  <div class="track2"><div class="fill" style="width: 67%"></div></div>
+                  <span class="val">2.1M/s</span>
+                </div>
+              </div>
+              <p class="take">
+                Bursty, high-throughput logging — request loops, batch jobs. Pequi sustains more
+                lines per second.
+              </p>
+            </div>
+
+            <div class="uc">
+              <h4>Plain &amp; printf-style text</h4>
+              <div class="uc-code">log.info("server started")</div>
+              <span class="badge lose">Pino ≈ 1.2× faster</span>
+              <div class="ucbars">
+                <div class="ucbar pq">
+                  <span class="lbl">Pequi</span>
+                  <div class="track2"><div class="fill" style="width: 84%"></div></div>
+                  <span class="val">2.6M/s</span>
+                </div>
+                <div class="ucbar pn">
+                  <span class="lbl">Pino</span>
+                  <div class="track2"><div class="fill" style="width: 100%"></div></div>
+                  <span class="val">3.1M/s</span>
+                </div>
+              </div>
+              <p class="take">
+                Simple strings and <span class="mono">%s</span>-formatted messages. Pino's direct
+                string-building wins here — if this is most of your logging, use Pino.
+              </p>
+            </div>
+          </div>
+
+          <div class="bottomline">
+            <b>Bottom line:</b> reach for Pequi if you log <strong>structured data</strong> or at
+            <strong>high volume</strong>, and want it running natively in Deno without crashing on
+            circular references or BigInts. If your logging is mostly <strong>plain or printf-style
+            strings</strong>, Pino is faster — use Pino.
+          </div>
+        </div>
+
+        <!-- Full micro-benchmark data (toggled) -->
+        <div id="bench-full" hidden>
+          <p class="lead">
+            All 17 micro-benchmarks, mean of 3 independent runs · 20,000 iterations/case · discard
+            sink · 12th-gen i7-12700H · Deno 2.8.3 / V8 14.9. Higher is better.
+          </p>
+          <div class="bctrl">
+            <div class="seg" role="group" aria-label="Pequi variant">
+              <button data-v="src" aria-pressed="true">Source (TS)</button>
+              <button data-v="bun" aria-pressed="false">Bundled (Rolldown)</button>
+              <button data-v="natS" aria-pressed="false">Native (Rust)</button>
+            </div>
+          </div>
+          <p class="note" id="variant-note"></p>
+          <div class="bars" id="bars"></div>
+          <p class="note">
+            Bars are normalized per row to the faster of the two. Verdict = Pequi vs Pino for the
+            selected variant. “par” = within ±10% (under the ~15% measurement-noise floor).
+          </p>
+
+          <table class="data" id="full">
+            <thead>
+              <tr>
+                <th>Case (M ops/sec)</th>
+                <th>Source</th>
+                <th>Bundled</th>
+                <th>Min*</th>
+                <th>Native</th>
+                <th>Pino</th>
+                <th>noise</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="note">
+            * <strong>Minified is experimental</strong> and not recommended — shown for reference
+            only, never treated as a product variant. Native targets file/buffered I/O; it is slower
+            than source on these discard-sink microbenchmarks by design.
+          </p>
+        </div>
       </div>
     </section>
 
@@ -742,10 +942,11 @@ log.info({ big: 10n })
           <div class="card">
             <h4 style="color: var(--amber)">Rust native: only for real I/O</h4>
             <p>
-              For these discard/memory micro-benchmarks the native FFI sink is <strong>~45%
-                slower</strong> — the per-write FFI crossing costs more than it saves. It reaches
-              parity only on file bursts. Native pays off for sustained buffered I/O, not per-line
-              micro-loops — so it's opt-in, never the default.
+              For discard/memory micro-benchmarks the native FFI sink is <strong>~52%
+                slower</strong> — the per-write FFI crossing costs more than it saves. But on real
+              file bursts it now <strong>wins</strong> (≈1.1–1.9× faster), because v0.7 made file
+              destinations buffer by default. Native pays off for sustained buffered file I/O, not
+              per-line micro-loops — so it's opt-in, never the default.
             </p>
           </div>
         </div>
@@ -772,25 +973,25 @@ log.info({ big: 10n })
     </footer>
 
     <script>
-      // Mean of 3 runs, ops/sec (raw), post-v0.6 hot-path optimization. Variants: src, bun, min, natS(native), pino.
+      // Mean of 3 runs, ops/sec (raw), post-v0.7 (native file buffering). Variants: src, bun, min, natS(native), pino.
       const DATA = [
-    { name: "disabled-level-string", src: 18.46e6, bun: 27.00e6, min: 17.04e6, natS: 21.44e6, pino: 50.39e6, cv: 16 },
-    { name: "disabled-level-object", src: 44.64e6, bun: 25.16e6, min: 35.39e6, natS: 20.92e6, pino: 48.02e6, cv: 20 },
-    { name: "enabled-string", src: 2.24e6, bun: 2.28e6, min: 2.28e6, natS: 0.86e6, pino: 3.32e6, cv: 19 },
-    { name: "enabled-object-small", src: 2.80e6, bun: 3.33e6, min: 2.81e6, natS: 0.89e6, pino: 1.68e6, cv: 14 },
-    { name: "enabled-object-medium", src: 1.15e6, bun: 1.17e6, min: 1.31e6, natS: 0.57e6, pino: 1.04e6, cv: 9 },
-    { name: "format-string", src: 1.51e6, bun: 1.52e6, min: 1.72e6, natS: 0.64e6, pino: 2.11e6, cv: 8 },
-    { name: "error-object", src: 0.0294e6, bun: 0.0304e6, min: 0.0294e6, natS: 0.0292e6, pino: 0.0296e6, cv: 2 },
-    { name: "child-bindings", src: 2.14e6, bun: 2.25e6, min: 2.10e6, natS: 0.82e6, pino: 2.23e6, cv: 13 },
-    { name: "serializer", src: 2.08e6, bun: 2.21e6, min: 1.84e6, natS: 0.71e6, pino: 2.39e6, cv: 18 },
-    { name: "redaction", src: 1.06e6, bun: 1.11e6, min: 1.05e6, natS: 0.59e6, pino: 0.92e6, cv: 13 },
-    { name: "formatter-level", src: 3.56e6, bun: 3.63e6, min: 3.61e6, natS: 0.73e6, pino: 4.03e6, cv: 15 },
-    { name: "mixin", src: 2.65e6, bun: 2.80e6, min: 3.01e6, natS: 0.78e6, pino: 2.81e6, cv: 9 },
-    { name: "hooks-log-method", src: 2.28e6, bun: 2.33e6, min: 2.13e6, natS: 0.74e6, pino: 2.75e6, cv: 14 },
-    { name: "burst-1000", src: 2.99e6, bun: 3.07e6, min: 3.09e6, natS: 0.81e6, pino: 2.35e6, cv: 13 },
-    { name: "burst-10000", src: 2.98e6, bun: 2.85e6, min: 3.05e6, natS: 0.82e6, pino: 2.27e6, cv: 17 },
-    { name: "file-burst-1000", src: 0.64e6, bun: 0.67e6, min: 0.68e6, natS: 0.63e6, pino: 0.70e6, cv: 12 },
-    { name: "flush-after-1000", src: 2.72e6, bun: 3.22e6, min: 2.89e6, natS: 0.89e6, pino: 2.11e6, cv: 17 },
+    { name: "disabled-level-string", src: 19.31e6, bun: 19.92e6, min: 19.30e6, natS: 19.66e6, pino: 48.06e6, cv: 26 },
+    { name: "disabled-level-object", src: 47.72e6, bun: 34.39e6, min: 47.99e6, natS: 18.59e6, pino: 46.14e6, cv: 21 },
+    { name: "enabled-string", src: 2.58e6, bun: 1.92e6, min: 2.67e6, natS: 0.81e6, pino: 3.09e6, cv: 14 },
+    { name: "enabled-object-small", src: 2.70e6, bun: 2.85e6, min: 2.80e6, natS: 0.95e6, pino: 2.07e6, cv: 20 },
+    { name: "enabled-object-medium", src: 1.09e6, bun: 1.24e6, min: 1.40e6, natS: 0.56e6, pino: 1.06e6, cv: 13 },
+    { name: "format-string", src: 1.37e6, bun: 1.42e6, min: 1.57e6, natS: 0.66e6, pino: 2.02e6, cv: 18 },
+    { name: "error-object", src: 0.0307e6, bun: 0.0301e6, min: 0.0311e6, natS: 0.0291e6, pino: 0.0294e6, cv: 2 },
+    { name: "child-bindings", src: 2.13e6, bun: 2.31e6, min: 2.47e6, natS: 0.81e6, pino: 2.00e6, cv: 15 },
+    { name: "serializer", src: 2.06e6, bun: 2.30e6, min: 2.22e6, natS: 0.80e6, pino: 2.53e6, cv: 18 },
+    { name: "redaction", src: 1.15e6, bun: 1.13e6, min: 1.05e6, natS: 0.58e6, pino: 0.89e6, cv: 17 },
+    { name: "formatter-level", src: 4.04e6, bun: 3.80e6, min: 3.85e6, natS: 0.79e6, pino: 4.15e6, cv: 11 },
+    { name: "mixin", src: 3.13e6, bun: 3.14e6, min: 3.18e6, natS: 0.85e6, pino: 2.96e6, cv: 7 },
+    { name: "hooks-log-method", src: 2.31e6, bun: 2.39e6, min: 2.25e6, natS: 0.81e6, pino: 2.63e6, cv: 18 },
+    { name: "burst-1000", src: 2.71e6, bun: 3.30e6, min: 2.88e6, natS: 0.90e6, pino: 2.23e6, cv: 13 },
+    { name: "burst-10000", src: 3.13e6, bun: 3.42e6, min: 3.28e6, natS: 0.88e6, pino: 2.09e6, cv: 16 },
+    { name: "file-burst-1000", src: 0.71e6, bun: 0.74e6, min: 0.78e6, natS: 0.80e6, pino: 0.66e6, cv: 7 },
+    { name: "flush-after-1000", src: 2.92e6, bun: 2.85e6, min: 2.98e6, natS: 0.78e6, pino: 2.04e6, cv: 23 },
       ];
       const M = (n) => (n / 1e6).toFixed(n < 0.1e6 ? 3 : 2);
       let variant = "src";
@@ -845,7 +1046,7 @@ log.info({ big: 10n })
         if (variant === "natS") {
           note.style.color = "var(--red)";
           note.textContent =
-            "⚠ Native targets file/buffered I/O, not discard-sink microbenchmarks — it is slower here by design. See the Findings section.";
+            "Native wins on real buffered I/O (see file-burst, fastest here) but loses on the discard-sink rows — there's no buffer to amortize the FFI crossing. As of v0.7 file destinations buffer by default.";
         } else if (variant === "bun") {
           note.style.color = "var(--faint)";
           note.textContent =
@@ -855,9 +1056,10 @@ log.info({ big: 10n })
           note.textContent = "Source = the published TypeScript running directly under Deno.";
         }
       }
-      document.querySelectorAll(".seg button").forEach((b) => {
+      // Variant selector (Source / Bundled / Native), scoped to its own segmented control.
+      document.querySelectorAll(".seg button[data-v]").forEach((b) => {
         b.addEventListener("click", () => {
-          document.querySelectorAll(".seg button").forEach((x) =>
+          b.parentElement.querySelectorAll("button").forEach((x) =>
             x.setAttribute("aria-pressed", "false")
           );
           b.setAttribute("aria-pressed", "true");
@@ -866,6 +1068,22 @@ log.info({ big: 10n })
           renderNote();
         });
       });
+
+      // View toggle (Common use cases / Full data).
+      const simpleView = document.getElementById("bench-simple");
+      const fullView = document.getElementById("bench-full");
+      document.querySelectorAll(".seg button[data-view]").forEach((b) => {
+        b.addEventListener("click", () => {
+          b.parentElement.querySelectorAll("button").forEach((x) =>
+            x.setAttribute("aria-pressed", "false")
+          );
+          b.setAttribute("aria-pressed", "true");
+          const full = b.dataset.view === "full";
+          fullView.hidden = !full;
+          simpleView.hidden = full;
+        });
+      });
+
       renderBars();
       renderTable();
       renderNote();

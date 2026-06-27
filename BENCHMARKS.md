@@ -124,6 +124,20 @@ as native.
 Discard-sink numbers are still useful as overhead diagnostics, but they are not marketing evidence
 for the native backend.
 
+### v0.7: buffered file writes by default
+
+The native win on file I/O comes from the Rust `BufWriter` batching syscalls. As of v0.7, a file
+destination defaults to a **64 KiB buffer** (`DEFAULT_FILE_BUFFER_SIZE` in
+`src/backends/native.ts`), so this win is delivered without the caller setting `nativeBufferSize`.
+Before v0.7 the default was `0` (unbuffered), which paid the FFI crossing **and** a syscall per line
+— strictly worse than the pure TypeScript file sink. stdout/stderr stay unbuffered by default for
+interactivity; discard ignores buffering.
+
+Measured (median of 9 runs, burst-then-flush, default config): native is **0.54×** of pure at 1,000
+lines (~1.9× faster), narrowing to **~0.9×** at 100,000 lines as the OS page cache absorbs pure's
+extra syscalls. Native still loses on per-line discard/memory micro-workloads, where there is no
+buffer to amortize the FFI crossing — that is expected, not a regression.
+
 ## Rolldown Bundle Investigation
 
 `bench/bundle/` investigates whether bundling Pequi's TypeScript implementation into JavaScript
@@ -135,14 +149,16 @@ Rolldown bundle is an optional distribution artifact for users who want to test 
 
 The investigation found:
 
-- The non-minified Rolldown bundle was modestly faster than source TypeScript on average, about
-  +6.5%.
-- The minified bundle was less consistent, about +4.8% on average, and is not worth defaulting to
-  because it hurts debuggability.
-- The median CV/noise floor was around 12%, so individual rows should not drive product decisions.
-- The average signal is more useful than any single case.
-- Gains were concentrated around closure-heavy, hook-heavy, formatter-heavy, and disabled-level
-  paths.
+- The non-minified Rolldown bundle is marginally faster than source TypeScript on average, about
+  +4.4% (refreshed after the v0.6 optimization).
+- The minified bundle shows no reliable benefit, about +0.8% on average, and is not worth defaulting
+  to because it hurts debuggability.
+- The median CV/noise floor is around 14%, larger than nearly every per-case effect, so individual
+  rows should not drive product decisions — only the average signal is useful.
+- After the v0.6 hot-path optimization, the bundled package averages about +3.0% faster than Pino
+  (it was −24% before v0.6).
+
+Full per-case tables: `reports/rolldown-bundle-investigation.md`.
 
 Output equivalence is required before performance numbers count. The runner compares bundled output
 against source Pequi and normalizes volatile fields such as time, pid, hostname, and
@@ -184,14 +200,19 @@ answer different questions.
 
 Future benchmark changes must preserve source-vs-bundle and Pequi-vs-Pino comparisons.
 
-## Next Pino Performance Gaps
+## Pino Performance Gaps (v0.6 status)
 
-The bundle helps some TypeScript runtime shape costs, but the remaining Pino gaps should be attacked
-directly in the source implementation:
+The v0.6 hot-path optimization (copy-on-write serializer/redaction, slice-based formatter, baked
+numeric level gate) closed the main gaps in the source implementation. Pequi is now faster than Pino
+on the object-heavy and high-volume paths (serializer, redaction, formatter, child bindings, mixin,
+bursts) and much closer on the lightweight string paths.
 
-- Disabled-level fast path.
-- Enabled-string path.
-- Format-string path.
-- Serializer overhead.
-- Redaction overhead.
-- Formatter and hook overhead.
+Remaining structural gaps, where Pino's direct string-building beats building a record object plus
+`JSON.stringify`:
+
+- Disabled-level reject (already faster than Pino warm; behind only in cold-start measurement).
+- Enabled-string, format-string.
+- Serializer and hooks (close, ~0.85–0.9× of Pino).
+
+Closing these further would need a string-building fast path that bypasses the object-then-stringify
+step for simple records — a larger architectural change, deferred.

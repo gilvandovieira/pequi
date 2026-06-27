@@ -5,6 +5,38 @@ Pequi has one optional native backend: Rust loaded through Deno FFI.
 The pure TypeScript backend remains mandatory for normal usage. Native support is optional, requires
 `--allow-ffi`, and must not be required by code that wants portable Pequi behavior.
 
+## When to Use Native
+
+Rarely. Native only accelerates the **write/flush** path — TypeScript still builds every log line
+(formatting, serializers, redaction, JSON encoding), so native does nothing for CPU-bound logging.
+For most applications the pure TypeScript backend (the default) is the right choice: after v0.6 it
+is already faster than Pino on most paths, runs anywhere Deno runs, and needs no native library.
+
+Use `native: "auto"` / `"required"` only when **all** of these hold:
+
+- **High-volume logging to a file.** This is the one workload where native wins, because the Rust
+  `BufWriter` batches syscalls. Measured file bursts: ~1.9× faster than pure at 1,000 lines,
+  narrowing to ~1.1× at 100,000 (the OS page cache absorbs pure's extra syscalls at scale).
+- **You can ship the prebuilt `.so`** for your platform and grant `--allow-ffi`.
+- **Buffered writes are acceptable.** File destinations buffer (64 KiB by default, since v0.7), so
+  lines are flushed on `flush()`/drop, not per line; a hard crash can lose the buffered tail. Set
+  `nativeBufferSize: 0` for unbuffered/synchronous writes.
+
+Stay on pure TypeScript (`native: false`, the default) when any of these apply:
+
+- You log to **stdout/stderr** (native keeps these unbuffered for interactivity — little benefit,
+  and the FFI crossing can make it slower).
+- You use **discard / memory / network sinks, or write per line** — native was ~52% slower in these
+  micro-workloads, where there is no buffer to amortize the FFI crossing.
+- **Low or moderate volume** — the win only appears under sustained bursts.
+- **Serverless / edge, or you cannot ship a native binary** — pure TypeScript needs no
+  `--allow-ffi`.
+- Your bottleneck is the **log payload** (serialization/formatting), which native does not touch.
+
+Operational note: `native: "auto"` silently falls back to pure TypeScript if the library cannot
+load. If you are relying on the native win, use `native: "required"` (which fails loudly) or check
+the backend diagnostics — otherwise a fallback can be mistaken for native performance.
+
 ## Responsibility Boundary
 
 TypeScript owns:

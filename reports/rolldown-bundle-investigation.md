@@ -3,13 +3,12 @@
 _Question: does compiling/bundling Pequi with Rolldown improve runtime performance over running the
 TypeScript source directly under Deno?_
 
-**TL;DR — Yes, but marginally.** Averaged over 3 independent runs (numbers refreshed after the v0.6
-hot-path optimization), the Rolldown bundle is **+4.4%** faster than source; the minified bundle is
-**+0.8%**. The per-case measurement noise floor is **~14% (median CV)**, larger than the effect for
-nearly every case, so the average is the only trustworthy signal. Output is verified byte-identical
-to source. Separately, the v0.6 source optimization closed the API-layer gaps: the bundle now
-averages **+3.0% vs Pino** (faster), versus −24% before v0.6. **Recommendation: ship the
-non-minified bundle; skip minification.**
+**TL;DR — Yes, but marginally.** Averaged over 3 independent runs (refreshed after v0.7), the
+Rolldown bundle is **~+1–4% faster than source** across runs — the exact figure swings (+1.2% this
+run) because the per-case noise floor is **~14% (median CV)**, larger than the effect, so only the
+direction is trustworthy. Output is verified byte-identical to source. Separately, after the v0.6
+source optimization the bundle now averages **~+5% vs Pino** (faster), versus −24% before v0.6.
+**Recommendation: ship the non-minified bundle; skip minification.**
 
 ## Environment
 
@@ -37,26 +36,26 @@ non-minified bundle; skip minification.**
 
 | Case                  | source | bundled |   min |  pino | bundled vs source | min vs source | maxCV |
 | --------------------- | -----: | ------: | ----: | ----: | ----------------: | ------------: | ----: |
-| disabled-level-string |  18.46 |   27.00 | 17.04 | 50.39 |            +46.3% |         −7.7% |   16% |
-| enabled-object-small  |   2.80 |    3.33 |  2.81 |  1.68 |            +18.6% |         +0.3% |   14% |
-| flush-after-1000      |   2.72 |    3.22 |  2.89 |  2.11 |            +18.3% |         +6.4% |   17% |
-| serializer            |   2.08 |    2.21 |  1.84 |  2.39 |             +6.3% |        −11.6% |   18% |
-| mixin                 |   2.65 |    2.80 |  3.01 |  2.81 |             +5.7% |        +13.6% |    9% |
-| child-bindings        |   2.14 |    2.25 |  2.10 |  2.23 |             +4.7% |         −2.0% |   13% |
-| redaction             |   1.06 |    1.11 |  1.05 |  0.92 |             +4.7% |         −0.7% |   13% |
-| file-burst-1000       |   0.64 |    0.67 |  0.68 |  0.70 |             +4.3% |         +6.3% |   12% |
-| error-object          |   0.03 |    0.03 |  0.03 |  0.03 |             +3.3% |         +0.2% |    2% |
-| burst-1000            |   2.99 |    3.07 |  3.09 |  2.35 |             +2.6% |         +3.3% |    7% |
-| hooks-log-method      |   2.28 |    2.33 |  2.13 |  2.75 |             +2.2% |         −6.6% |   14% |
-| formatter-level       |   3.56 |    3.63 |  3.61 |  4.03 |             +2.1% |         +1.5% |   15% |
-| enabled-object-medium |   1.15 |    1.17 |  1.31 |  1.04 |             +2.0% |        +13.9% |    9% |
-| enabled-string        |   2.24 |    2.28 |  2.28 |  3.32 |             +1.7% |         +1.9% |   19% |
-| format-string         |   1.51 |    1.52 |  1.72 |  2.11 |             +0.3% |        +13.3% |    8% |
-| burst-10000           |   2.98 |    2.85 |  3.05 |  2.27 |             −4.6% |         +2.1% |   17% |
-| disabled-level-object |  44.64 |   25.16 | 35.39 | 48.02 |            −43.6% |        −20.7% |   20% |
+| burst-1000            |   2.71 |    3.30 |  2.88 |  2.23 |            +21.5% |         +6.0% |   13% |
+| enabled-object-medium |   1.09 |    1.24 |  1.40 |  1.06 |            +14.1% |        +28.1% |   13% |
+| serializer            |   2.06 |    2.30 |  2.22 |  2.53 |            +11.3% |         +7.7% |   18% |
+| burst-10000           |   3.13 |    3.42 |  3.28 |  2.09 |             +9.5% |         +4.9% |   14% |
+| child-bindings        |   2.13 |    2.31 |  2.47 |  2.00 |             +8.4% |        +15.6% |   15% |
+| enabled-object-small  |   2.70 |    2.85 |  2.80 |  2.07 |             +5.4% |         +3.8% |   20% |
+| file-burst-1000       |   0.71 |    0.74 |  0.78 |  0.66 |             +4.7% |        +10.0% |    7% |
+| hooks-log-method      |   2.31 |    2.39 |  2.25 |  2.63 |             +3.5% |         −2.3% |   18% |
+| format-string         |   1.37 |    1.42 |  1.57 |  2.02 |             +3.4% |        +14.3% |   18% |
+| disabled-level-string |  19.31 |   19.92 | 19.30 | 48.06 |             +3.1% |         −0.0% |   26% |
+| mixin                 |   3.13 |    3.14 |  3.18 |  2.96 |             +0.2% |         +1.4% |    5% |
+| redaction             |   1.15 |    1.13 |  1.05 |  0.89 |             −1.7% |         −8.9% |    9% |
+| error-object          |   0.03 |    0.03 |  0.03 |  0.03 |             −1.9% |         +1.4% |    2% |
+| flush-after-1000      |   2.92 |    2.85 |  2.98 |  2.04 |             −2.3% |         +2.1% |   23% |
+| formatter-level       |   4.04 |    3.80 |  3.85 |  4.15 |             −5.9% |         −4.8% |    4% |
+| enabled-string        |   2.58 |    1.92 |  2.67 |  3.09 |            −25.7% |         +3.1% |   14% |
+| disabled-level-object |  47.72 |   34.39 | 47.99 | 46.14 |            −27.9% |         +0.6% |   21% |
 
-**Averages across 17 cases:** bundled vs source **+4.4%** · bundled-min vs source **+0.8%** ·
-bundled vs Pino **+3.0%** · median maxCV **14%**.
+**Averages across 17 cases:** bundled vs source **+1.2%** · bundled-min vs source **+4.9%** ·
+bundled vs Pino **+5.3%** · median maxCV **14%**.
 
 ## Analysis
 
@@ -65,23 +64,23 @@ That lets V8 inline and devirtualize across what were ES-module boundaries — e
 `serializeErrorValues`, `formatJsonLine` → `safeStableStringify`, and the per-level method closures.
 The effect is real but small.
 
-**Credible signal vs noise.** After v0.6 the bundled-vs-source deltas are uniformly small: most
-cases sit at +2–6%, below their own ~9–19% CV, so they are individually indistinguishable from
-noise. The two largest figures, `disabled-level-string` (+46%) and `disabled-level-object` (−44%),
-are the clearest noise of all — the trivial reject path swings wildly between runs (the same harness
-shows +46% for one and −44% for the other). The trustworthy statement is the aggregate: **+4.4% on
-average**, with no case showing a reproducible regression.
+**Credible signal vs noise.** The bundled-vs-source deltas are individually indistinguishable from
+noise: each sits below its own 9–26% CV, and they swing between runs. The `disabled-level-*` reject
+path is the clearest example — last run it showed +46% / −44% for the two disabled cases, this run
++3% / −28%; the cell value is dominated by measurement noise, not a real effect. The trustworthy
+statement is the aggregate: **≈+1% this run** (about +1–4% across runs), with no case showing a
+reproducible regression.
 
 **Net:** bundling is a small, broadly-positive change within the noise floor — worth taking for
 distribution, not for speed.
 
 ## Versus Pino
 
-This flipped with v0.6. The bundled package now averages **+3.0% faster than Pino** (it was −24%
+This flipped with v0.6. The bundled package now averages **~+5% faster than Pino** (it was −24%
 before the source optimization). Per case:
 
 - **Faster than Pino:** the object-heavy and high-volume paths — `enabled-object` (small/medium),
-  `redaction`, `child-bindings` (≈), `mixin` (≈), `burst-1000/10000`, `flush-after-1000`.
+  `redaction`, `child-bindings`, `mixin`, `burst-1000/10000`, `flush-after-1000`, and `file-burst`.
 - **Still behind Pino:** the lightweight string and reject paths — `disabled-level-string`,
   `enabled-string`, `format-string`, `serializer`, `hooks-log-method` — where Pino's direct
   string-building beats building a record object plus `JSON.stringify`. These are the structural,
@@ -89,19 +88,19 @@ before the source optimization). Per case:
 
 ## Minification
 
-Not worth it. It averages **less** than plain bundling (+0.8% vs +4.4%) and is inconsistent
-(`serializer` −11.6% minified vs +6.3% bundled; `disabled-level-object` −20.7% minified; `mixin`
-+13.6% minified vs +5.7% bundled). No reliable speed benefit, and it costs debuggability. Keep the
-readable bundle.
+Roughly on par with plain bundling on average and inconsistent per case (e.g.
+`enabled-object-medium` +28% minified vs +14% bundled; `redaction` −9% minified vs −2% bundled). No
+reliable speed benefit, and it costs debuggability. Keep the readable bundle.
 
 ## Native backend (orthogonal note)
 
-The native FFI variants were measured too. For these discard/memory micro-workloads native is **~52%
-slower** than pure TS on average (e.g. `enabled-string` −62%, `child-bindings` −62% vs pure source)
-because the per-write FFI crossing costs more than it saves. After v0.6 made the TypeScript sink
-faster, even `file-burst` is now roughly at parity (≈ −2%) rather than a native win. Native pays off
-for sustained buffered I/O, not per-line micro-benchmarks. This is independent of the bundling
-question.
+The native FFI variants were measured too. For the discard/memory micro-workloads native is **~52%
+slower** than pure TS on average (the per-write FFI crossing costs more than it saves, with no
+buffer to amortize it). But on the one real-I/O case, **`file-burst` now favors native** — 0.80 vs
+0.71 M ops/sec (≈1.14× faster than pure source). That win arrived in **v0.7**, which made file
+destinations buffer by default (64 KiB); before v0.7 the native default was unbuffered, so it paid
+the FFI crossing plus a syscall per line and lost even on file I/O. Native pays off for sustained
+buffered I/O, not per-line discard micro-benchmarks. This is independent of the bundling question.
 
 ## Recommendation
 
