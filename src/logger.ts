@@ -34,7 +34,7 @@ import type {
   TimestampOption,
 } from "./types.ts";
 
-export const version = "0.1.0";
+export const version = "0.5.0";
 
 export interface PequiSymbols {
   serializers: symbol;
