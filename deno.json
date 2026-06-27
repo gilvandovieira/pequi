@@ -25,7 +25,10 @@
     "check": "deno check mod.ts tests/**/*.ts bench/**/*.ts scripts/**/*.ts",
     "test": "deno test --allow-read --allow-write --allow-env=NODE_V8_COVERAGE --allow-sys=hostname",
     "test:native": "deno test --allow-read --allow-write --allow-ffi tests/integration/native-loader.test.ts",
-    "bench": "deno bench --allow-read --allow-write",
+    "bench": "deno bench --allow-read --allow-write bench/**/*.bench.ts",
+    "bench:compare": "deno bench --allow-read --allow-write bench/compare/**/*.bench.ts",
+    "bench:compare:native": "deno bench --allow-read --allow-write --allow-ffi bench/compare/**/*.bench.ts",
+    "bench:report": "deno run --allow-read --allow-write scripts/bench-report.ts",
     "bench:native": "deno bench --allow-read --allow-write --allow-ffi bench/**/*.bench.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
@@ -33,7 +36,8 @@
     "native:check": "deno run --allow-read --allow-ffi scripts/check-native.ts"
   },
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.14"
+    "@std/assert": "jsr:@std/assert@^1.0.14",
+    "pino": "npm:pino@10.3.1"
   },
   "compilerOptions": {
     "strict": true

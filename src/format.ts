@@ -1,3 +1,4 @@
+import { type EncodeOptions, safeStableStringify } from "./encode.ts";
 import { isError } from "./serializers.ts";
 
 export interface NormalizeLogArgumentsOptions {
@@ -79,8 +80,21 @@ export function formatMessage(template: string, args: unknown[]): string {
   return rest.length === 0 ? formatted : `${formatted} ${rest.join(" ")}`;
 }
 
-export function formatJsonLine(record: Record<string, unknown>): string {
-  return JSON.stringify(record);
+export function formatJsonLine(
+  record: Record<string, unknown>,
+  options: EncodeOptions = {},
+): string {
+  // Fast path: native `JSON.stringify` produces identical output for serializable records.
+  // Only fall back to the safe encoder when it throws (circular references, BigInt) or when
+  // depth/edge limits are requested.
+  if (options.depthLimit === undefined && options.edgeLimit === undefined) {
+    try {
+      return JSON.stringify(record);
+    } catch {
+      return safeStableStringify(record);
+    }
+  }
+  return safeStableStringify(record, options);
 }
 
 function withMessage(

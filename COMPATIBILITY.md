@@ -26,6 +26,13 @@ runtime API.
 - `mixin` and `mixinMergeStrategy`.
 - `hooks.logMethod`.
 - Minimal `destination()` helper and Pino-style write destinations.
+- Circular-safe JSON encoding: circular references render as `"[Circular]"` instead of throwing,
+  preserving insertion order to match Pino's line output.
+- `BigInt` (numeric literal), non-finite numbers (`null`), `toJSON`, and dropped
+  `undefined`/function/symbol values, all matching `JSON.stringify` and Pino.
+- Opt-in `depthLimit` and `edgeLimit` truncation using `safe-stable-stringify` tokens (`"[Object]"`,
+  `"[Array]"`, and `"N items not stringified"`); both default to no limit, matching Pino's
+  observable output.
 
 ## Planned
 
@@ -37,7 +44,7 @@ runtime API.
 - `multistream`.
 - Complete `stdSerializers.req` and `stdSerializers.res`.
 - Exact Node `util.format` parity for less common placeholders.
-- Full `onChild`, `safe`, `depthLimit`, and `edgeLimit` behavior.
+- Full `onChild` behavior.
 
 ## Intentionally Different
 
@@ -45,6 +52,8 @@ runtime API.
 - Pino destination internals based on SonicBoom are not copied.
 - Node-only runtime details may differ under Deno.
 - The Rust native backend is outside this compatibility layer and is not part of this task.
+- The `safe` option is accepted but inert: Pequi is always circular-safe, matching the observable
+  behavior of Pino 10.3.1 where `safe: false` still does not throw on circular references.
 
 ## Test Oracle Permissions
 

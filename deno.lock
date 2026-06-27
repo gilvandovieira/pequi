@@ -3,7 +3,8 @@
   "specifiers": {
     "jsr:@std/assert@^1.0.14": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
-    "npm:pino@10.3.1": "10.3.1"
+    "npm:pino@10.3.1": "10.3.1",
+    "npm:safe-stable-stringify@2": "2.5.0"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -85,7 +86,8 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/assert@^1.0.14"
+      "jsr:@std/assert@^1.0.14",
+      "npm:pino@10.3.1"
     ]
   }
 }

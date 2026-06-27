@@ -1,6 +1,7 @@
 import { createBackend } from "./backend.ts";
 import { copyBindings, createBaseBindings, mergeBindings } from "./bindings.ts";
 import { destination as createDestination, isWritableDestination } from "./destination.ts";
+import type { EncodeOptions } from "./encode.ts";
 import { formatJsonLine, normalizeLogArguments } from "./format.ts";
 import { DEFAULT_LEVEL, isLevelEnabled, levels, levelToNumber, pinoLevels } from "./levels.ts";
 import { redactRecord } from "./redaction.ts";
@@ -70,6 +71,7 @@ interface LoggerState {
   mixin?: () => Record<string, unknown>;
   mixinMergeStrategy?: MixinMergeStrategy;
   lineEnding: "\n" | "\r\n";
+  encode: EncodeOptions;
   events: EventRegistry;
 }
 
@@ -126,6 +128,7 @@ function pequiFactory(
     mixin: options.mixin,
     mixinMergeStrategy: options.mixinMergeStrategy,
     lineEnding,
+    encode: { depthLimit: options.depthLimit, edgeLimit: options.edgeLimit },
     events: new Map(),
   });
 }
@@ -177,6 +180,10 @@ function createLogger(state: LoggerState): Logger {
         mixin: options.mixin ?? state.mixin,
         mixinMergeStrategy: options.mixinMergeStrategy ?? state.mixinMergeStrategy,
         lineEnding: options.crlf === true ? "\r\n" : state.lineEnding,
+        encode: {
+          depthLimit: options.depthLimit ?? state.encode.depthLimit,
+          edgeLimit: options.edgeLimit ?? state.encode.edgeLimit,
+        },
         events: new Map(),
       };
       const child = createLogger(childState);
@@ -272,7 +279,7 @@ function createLogMethod(state: LoggerState, level: CoreLogLevel): LogMethod {
       ...nextArgs: unknown[]
     ) => {
       const record = buildRecord(state, level, nextObjOrMsg, nextMsg, nextArgs);
-      state.backend.write(formatJsonLine(record));
+      state.backend.write(formatJsonLine(record, state.encode));
     };
 
     if (state.hooks?.logMethod !== undefined) {

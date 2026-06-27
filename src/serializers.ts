@@ -48,30 +48,55 @@ export const stdSerializers = {
 
 export function serializeErrorValues(record: Record<string, unknown>): Record<string, unknown> {
   const next: Record<string, unknown> = {};
+  const seen = new WeakMap<object, unknown>();
   for (const [key, value] of Object.entries(record)) {
-    next[key] = serializeValue(value);
+    next[key] = serializeValue(value, seen);
   }
   return next;
 }
 
-function serializeValue(value: unknown): unknown {
+function serializeValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
   if (isError(value)) {
     return serializeError(value);
   }
 
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  // Returning the in-progress copy keeps cycles intact with consistent identities, so the JSON
+  // encoder renders them as "[Circular]" at the same depth Pino does instead of recursing forever.
+  const existing = seen.get(value);
+  if (existing !== undefined) {
+    return existing;
+  }
+
   if (Array.isArray(value)) {
-    return value.map(serializeValue);
-  }
-
-  if (typeof value === "object" && value !== null) {
-    const next: Record<string, unknown> = {};
-    for (const [key, nested] of Object.entries(value)) {
-      next[key] = serializeValue(nested);
+    const result: unknown[] = [];
+    seen.set(value, result);
+    for (const item of value) {
+      result.push(serializeValue(item, seen));
     }
-    return next;
+    return result;
   }
 
-  return value;
+  // Only descend into plain objects. Dates, class instances, and other exotic objects are passed
+  // through untouched so their `toJSON` is honored at encode time instead of being flattened to {}.
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const next: Record<string, unknown> = {};
+  seen.set(value, next);
+  for (const [key, nested] of Object.entries(value)) {
+    next[key] = serializeValue(nested, seen);
+  }
+  return next;
+}
+
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 export function applySerializers(
