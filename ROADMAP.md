@@ -187,6 +187,19 @@ Acceptance criteria:
 - Minified output is either removed from default tasks or marked experimental.
 - This roadmap clearly states that the bundle is optional.
 
+Status — shipped:
+
+- Decision documented in `DISTRIBUTION.md` (canonical `@pequi/log` vs optional `@pequi/log/bundle`,
+  added to `publish.include`).
+- `@pequi/log/bundle` export ships the non-minified bundle with sourcemap and a `.d.ts` type shim;
+  the minified bundle is gitignored, excluded from publish, and `--minify`-only.
+- CI added (`.github/workflows/ci.yml`): `deno fmt --check`, `lint`, `check`, `test` (which runs the
+  bundle equivalence, type-export, and import smoke tests), and a freshness gate.
+- `deno task bundle:verify` (`scripts/verify-bundle.ts`) rebuilds and asserts the committed `dist/`
+  bundle is byte-identical to a clean build, so the published artifact never drifts from `mod.ts`.
+- Benchmark regression tracking stays manual/scheduled, not a CI gate, because the ~15% noise floor
+  makes it unreliable for blocking merges.
+
 Decision: adopt the non-minified Rolldown bundle as an optional distribution artifact.
 
 Rationale:
