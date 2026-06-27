@@ -1,0 +1,55 @@
+name: Publish
+
+# Publish @pequi/log to JSR. Pequi is pre-1.0, so publishing is deliberate: it runs when a GitHub
+# Release is published, or manually via workflow_dispatch — never automatically on push.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required for JSR publishing via GitHub OIDC (no token secret needed)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          # Same pinned toolchain as CI for a deterministic fmt/bundle.
+          deno-version: v2.8.3
+
+      # Never publish something that would fail the release gates. Mirrors the CI correctness gates
+      # (the ubuntu-x86_64 runner ships the committed prebuilt .so, so native paths run for real).
+      - name: Verify
+        run: |
+          deno task fmt:check
+          deno task lint
+          deno task check
+          deno task test
+          deno task test:native
+          deno task native:verify:artifacts
+          deno task bundle:verify
+
+      # On a release, the tag must match the version we are about to publish, so a mistagged release
+      # cannot ship a mismatched package version.
+      - name: Check tag matches version
+        if: github.event_name == 'release'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(jq -r .version jsr.json)"
+          if [ "$tag" != "$version" ]; then
+            echo "Release tag '$GITHUB_REF_NAME' (version '$tag') does not match jsr.json version '$version'." >&2
+            exit 1
+          fi
+          echo "Publishing @pequi/log@$version"
+
+      - name: Publish to JSR
+        run: deno publish
