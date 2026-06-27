@@ -1,9 +1,9 @@
 [package]
-name = "pequi-native"
+name = "pequi_log_native"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
 
 [lib]
-name = "pequi_native"
+name = "pequi_log"
 crate-type = ["cdylib"]

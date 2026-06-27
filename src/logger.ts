@@ -3,7 +3,15 @@ import { copyBindings, createBaseBindings, mergeBindings } from "./bindings.ts";
 import { destination as createDestination, isWritableDestination } from "./destination.ts";
 import type { EncodeOptions } from "./encode.ts";
 import { formatJsonLine, normalizeLogArguments } from "./format.ts";
-import { DEFAULT_LEVEL, isLevelEnabled, levels, levelToNumber, pinoLevels } from "./levels.ts";
+import {
+  assertLevelConfigured,
+  buildLevelRegistry,
+  CORE_LEVEL_NAMES,
+  DEFAULT_LEVEL,
+  type LevelComparisonOption,
+  type LevelRegistry,
+  pinoLevels,
+} from "./levels.ts";
 import { redactRecord } from "./redaction.ts";
 import {
   applySerializers,
@@ -14,7 +22,6 @@ import {
 } from "./serializers.ts";
 import type {
   Backend,
-  CoreLogLevel,
   Destination,
   Logger,
   LoggerFormatters,
@@ -56,6 +63,10 @@ export const stdTimeFunctions: PequiStdTimeFunctions = {
 interface LoggerState {
   backend: Backend;
   level: LogLevel;
+  levels: LevelRegistry;
+  customLevels?: Record<string, number>;
+  useOnlyCustomLevels?: boolean;
+  levelComparison?: LevelComparisonOption;
   enabled: boolean;
   baseFields: Record<string, unknown>;
   bindings: Record<string, unknown>;
@@ -107,9 +118,21 @@ function pequiFactory(
     lineEnding,
   });
 
+  const levelRegistry = buildLevelRegistry({
+    customLevels: options.customLevels,
+    useOnlyCustomLevels: options.useOnlyCustomLevels,
+    levelComparison: options.levelComparison,
+  });
+  const level = options.level ?? DEFAULT_LEVEL;
+  assertLevelConfigured(level, levelRegistry, options.useOnlyCustomLevels);
+
   return createLogger({
     backend,
-    level: options.level ?? DEFAULT_LEVEL,
+    level,
+    levels: levelRegistry,
+    customLevels: options.customLevels,
+    useOnlyCustomLevels: options.useOnlyCustomLevels,
+    levelComparison: options.levelComparison,
     enabled: options.enabled ?? true,
     baseFields: createDefaultBaseFields(options),
     bindings: createBaseBindings({
@@ -159,9 +182,32 @@ function createLogger(state: LoggerState): Logger {
       const childPrefix = options.msgPrefix === undefined
         ? state.msgPrefix
         : `${state.msgPrefix}${options.msgPrefix}`;
+
+      const childCustomLevels =
+        state.customLevels !== undefined || options.customLevels !== undefined
+          ? { ...state.customLevels, ...options.customLevels }
+          : undefined;
+      const childUseOnlyCustomLevels = options.useOnlyCustomLevels ?? state.useOnlyCustomLevels;
+      const childLevelComparison = options.levelComparison ?? state.levelComparison;
+      const childLevels = options.customLevels !== undefined ||
+          options.useOnlyCustomLevels !== undefined ||
+          options.levelComparison !== undefined
+        ? buildLevelRegistry({
+          customLevels: childCustomLevels,
+          useOnlyCustomLevels: childUseOnlyCustomLevels,
+          levelComparison: childLevelComparison,
+        })
+        : state.levels;
+      const childLevel = options.level ?? state.level;
+      assertLevelConfigured(childLevel, childLevels, childUseOnlyCustomLevels);
+
       const childState: LoggerState = {
         ...state,
-        level: options.level ?? state.level,
+        level: childLevel,
+        levels: childLevels,
+        customLevels: childCustomLevels,
+        useOnlyCustomLevels: childUseOnlyCustomLevels,
+        levelComparison: childLevelComparison,
         enabled: options.enabled ?? state.enabled,
         bindings: mergeBindings(state.bindings, bindings),
         serializers: options.serializers === undefined ? state.serializers : createSerializers(
@@ -203,7 +249,7 @@ function createLogger(state: LoggerState): Logger {
       return state.backend.flush();
     },
     isLevelEnabled(level: LogLevel): boolean {
-      return state.enabled && isLevelEnabled(state.level, level);
+      return state.enabled && state.levels.isEnabled(state.level, level);
     },
     on(event: string, listener: EventListener): Logger {
       addEventListener(state.events, event, listener);
@@ -232,18 +278,18 @@ function createLogger(state: LoggerState): Logger {
     },
     set level(level: LogLevel) {
       const previousLevel = state.level;
-      const previousValue = levelToNumber(previousLevel);
-      const newValue = levelToNumber(level);
+      const previousValue = state.levels.valueOf(previousLevel);
+      const newValue = state.levels.valueOf(level);
       state.level = level;
       if (previousLevel !== level) {
         logger.emit("level-change", level, newValue, previousLevel, previousValue, logger);
       }
     },
     get levelVal(): number {
-      return levelToNumber(state.level);
+      return state.levels.valueOf(state.level);
     },
     get levels() {
-      return pinoLevels;
+      return { values: state.levels.values, labels: state.levels.labels };
     },
     get version(): string {
       return version;
@@ -264,12 +310,25 @@ function createLogger(state: LoggerState): Logger {
     value: state.serializers,
   });
 
+  if (state.useOnlyCustomLevels === true) {
+    for (const name of CORE_LEVEL_NAMES) {
+      delete (logger as unknown as Record<string, unknown>)[name];
+    }
+  }
+
+  if (state.customLevels !== undefined) {
+    const dynamic = logger as unknown as Record<string, LogMethod>;
+    for (const name of Object.keys(state.customLevels)) {
+      dynamic[name] = createLogMethod(state, name);
+    }
+  }
+
   return logger;
 }
 
-function createLogMethod(state: LoggerState, level: CoreLogLevel): LogMethod {
+function createLogMethod(state: LoggerState, level: string): LogMethod {
   return function logMethod(this: Logger, objOrMsg?: unknown, msg?: string, ...args: unknown[]) {
-    if (!state.enabled || !isLevelEnabled(state.level, level)) {
+    if (!state.enabled || !state.levels.isEnabled(state.level, level)) {
       return;
     }
 
@@ -287,7 +346,7 @@ function createLogMethod(state: LoggerState, level: CoreLogLevel): LogMethod {
         this,
         [objOrMsg, msg, ...args].filter(trimTrailingUndefined),
         rawMethod,
-        levels[level],
+        state.levels.valueOf(level),
       );
       return;
     }
@@ -298,7 +357,7 @@ function createLogMethod(state: LoggerState, level: CoreLogLevel): LogMethod {
 
 function buildRecord(
   state: LoggerState,
-  level: CoreLogLevel,
+  level: string,
   objOrMsg: unknown,
   msg: string | undefined,
   args: unknown[],
@@ -388,8 +447,8 @@ function mergeFormatters(
   return child === undefined ? parent : { ...parent, ...child };
 }
 
-function formatLevel(state: LoggerState, level: CoreLogLevel): Record<string, unknown> {
-  const value = levels[level];
+function formatLevel(state: LoggerState, level: string): Record<string, unknown> {
+  const value = state.levels.valueOf(level);
   return state.formatters.level?.(level, value) ?? { level: value };
 }
 

@@ -24,7 +24,7 @@
   "tasks": {
     "check": "deno check mod.ts tests/**/*.ts bench/**/*.ts scripts/**/*.ts",
     "test": "deno test --allow-read --allow-write --allow-env=NODE_V8_COVERAGE --allow-sys=hostname",
-    "test:native": "deno test --allow-read --allow-write --allow-ffi tests/integration/native-loader.test.ts",
+    "test:native": "deno test --allow-read --allow-write --allow-ffi tests/integration/native-*.test.ts",
     "bench": "deno bench --allow-read --allow-write bench/**/*.bench.ts",
     "bench:compare": "deno bench --allow-read --allow-write bench/compare/**/*.bench.ts",
     "bench:compare:native": "deno bench --allow-read --allow-write --allow-ffi bench/compare/**/*.bench.ts",
@@ -32,7 +32,7 @@
     "bench:native": "deno bench --allow-read --allow-write --allow-ffi bench/**/*.bench.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
-    "native:build": "deno run --allow-run --allow-read --allow-write scripts/build-native.ts",
+    "native:build": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts",
     "native:check": "deno run --allow-read --allow-ffi scripts/check-native.ts"
   },
   "imports": {

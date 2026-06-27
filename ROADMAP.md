@@ -28,18 +28,24 @@ apps that Pino survives. Highest priority.
 - Acceptance met: oracle fixtures for cyclic objects and non-serializable values match Pino and
   never throw (`tests/compat/encoding.test.ts`, `tests/unit/encode.test.ts`).
 
-### Phase C2 — Custom Levels
+### Phase C2 — Custom Levels — Shipped
 
-Currently `customLevels`, `useOnlyCustomLevels`, and `levelComparison` are typed in `LoggerOptions`
-but never read, so they silently no-op. This phase makes them real.
+`customLevels`, `useOnlyCustomLevels`, and `levelComparison` were typed in `LoggerOptions` but never
+read, so they silently no-op. They are now real.
 
-- Generate a log method per custom level and expose it on the logger and its children.
-- Merge custom levels into `levels.values`, `levels.labels`, `levelVal`, and `isLevelEnabled`.
-- Implement `useOnlyCustomLevels`, including rejecting the core levels when set.
-- Implement `levelComparison` for `"ASC"`, `"DESC"`, and the custom comparator function form.
-- Propagate custom levels and comparison through `child()`.
-- Acceptance: factory, method-generation, comparison, and child-inheritance fixtures match the
-  oracle.
+- Done: `src/levels.ts` adds `buildLevelRegistry`, a per-logger level set carried on `LoggerState`;
+  `createLogger` generates a log method per custom level on the logger and its children.
+- Done: `levels.values`, `levels.labels`, `levelVal`, the `level` setter, and `isLevelEnabled` all
+  resolve through the registry.
+- Done: `useOnlyCustomLevels` drops the core methods and validates the active level via
+  `assertLevelConfigured` (matching Pino's `default level:X must be included in custom levels`).
+- Done: `levelComparison` resolves `"ASC"`, `"DESC"`, and a custom `(candidate, active) => boolean`
+  comparator, used by both `isLevelEnabled` and log-method gating.
+- Done: `child()` merges parent and child custom levels and propagates comparison. Unlike Pino
+  10.3.1, a child that adds custom levels keeps inherited custom-level methods working instead of
+  emitting a broken `undefined,...` line (see COMPATIBILITY.md).
+- Acceptance met: factory, `useOnlyCustomLevels`, `DESC`, and child fixtures match the oracle
+  (`tests/compat/custom-levels.test.ts`, `tests/unit/custom-levels.test.ts`).
 
 ### Phase C3 — Redaction Parity
 
@@ -101,30 +107,32 @@ Carried over from `COMPATIBILITY.md` and not planned for the compatibility layer
 - More compatibility fixtures.
 - Benchmark regression script.
 
-## v0.3 — Rust FFI Skeleton
+## v0.3 — Rust FFI Skeleton and Native Writer Alpha
 
 - Rust `cdylib`.
 - `Deno.dlopen` loader.
-- `linux-x86_64-gnu` first.
+- ABI version check.
+- `linux-x86_64-gnu` host build first.
+- Discard, stdout, stderr, and file destinations.
 - Write, flush, and drop ABI.
 - Native mode `auto`, `required`, and `false`.
-- FFI overhead benchmark.
+- Native integration tests.
+- Native writer benchmarks.
 
-## v0.4 — Native Writer Alpha
+## v0.4 — Linux ARM64 Release Hardening
 
-- Rust buffered sink.
-- Stdout, stderr, and file support.
-- Burst logging benchmark.
-- Flush correctness tests.
-- Native fallback tests.
-
-## v0.5 — Linux ARM64
-
-- `linux-aarch64-gnu` build.
+- `linux-aarch64-gnu` release build.
 - CI matrix.
 - Binary stripping.
 - Release artifact validation.
 - Memory stability tests.
+
+## v0.5 — Buffered Writer Tuning
+
+- Tune default buffer sizing per destination.
+- Measure stdout, stderr, file, and discard overhead separately.
+- Add long-running flush and drop stress tests.
+- Keep disabled-level logging entirely TypeScript.
 
 ## v0.6 — Encoder Decision
 

@@ -20,6 +20,7 @@ export function createBackend(options: CreateBackendOptions = {}): Backend {
   const nativeBackend = tryCreateNativeBackend({
     mode: nativeMode,
     destination: options.destination,
+    lineEnding: options.lineEnding,
   });
 
   if (nativeBackend !== undefined) {

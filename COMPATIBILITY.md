@@ -12,6 +12,10 @@ runtime API.
 - Core level methods: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, and `silent`.
 - Pino core levels, `level`, `levelVal`, `levels`, and `isLevelEnabled`.
 - Mutable level with `level-change` events.
+- `customLevels` with generated per-level methods, merged `levels.values`/`levels.labels`, and child
+  inheritance.
+- `useOnlyCustomLevels` (drops the core methods and requires the active level to be custom).
+- `levelComparison` as `"ASC"`, `"DESC"`, and a custom `(candidate, active) => boolean` comparator.
 - Common log argument forms, including format strings, object plus message, and Error plus message.
 - Child loggers, nested child bindings, independent child level mutation, and child `msgPrefix`.
 - `bindings()` and `setBindings()`.
@@ -36,8 +40,6 @@ runtime API.
 
 ## Planned
 
-- Full custom levels.
-- `useOnlyCustomLevels` and `levelComparison`.
 - Full fast-redact path syntax.
 - Destination parity with Pino internals.
 - `transport`.
@@ -54,6 +56,10 @@ runtime API.
 - The Rust native backend is outside this compatibility layer and is not part of this task.
 - The `safe` option is accepted but inert: Pequi is always circular-safe, matching the observable
   behavior of Pino 10.3.1 where `safe: false` still does not throw on circular references.
+- When a child adds its own `customLevels`, Pequi merges them with the parent's custom levels so
+  inherited custom-level methods keep working. Pino 10.3.1 instead replaces the child level set,
+  which makes inherited custom-level methods emit a broken `undefined,...` line; Pequi does not
+  reproduce that bug.
 
 ## Test Oracle Permissions
 

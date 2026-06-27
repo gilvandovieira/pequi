@@ -65,5 +65,21 @@ Run the optional native attempt with:
 deno task bench:compare:native
 ```
 
-The current native backend supports stdout only, so it is skipped by the fair discard and memory
-destination comparison unless native destination support changes later.
+## Native Rust writer benchmarks
+
+The native Rust backend currently accelerates only the write and flush path. TypeScript still owns
+Pino-compatible behavior, level checks, bindings, serializers, redaction, message formatting, and
+JSON line encoding.
+
+Disabled-level logging remains entirely TypeScript and should not call native code. Native is not
+expected to improve that benchmark.
+
+`bench/compare/native-writer.bench.ts` measures already formatted JSON line writes through the pure
+TypeScript writer and the optional Rust writer. It includes single-line writes, 1,000-line bursts,
+10,000-line bursts, flush-after-burst cases, and file sink bursts. The Pino reference remains a
+comparable Deno sink/logger reference, not an already-encoded writer API.
+
+Interpret native wins by workload. FFI overhead can dominate tiny one-line discard writes, while the
+native writer is expected to matter more for burst logging, buffered file writes, stdout/stderr
+writes, and high-volume backend workloads. Rust JSON encoding is a future decision and is not part
+of the current benchmark.
