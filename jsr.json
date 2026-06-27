@@ -1,0 +1,24 @@
+{
+  "name": "@pequi/log",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./pure": "./src/backends/pure.ts",
+    "./native": "./src/backends/native.ts"
+  },
+  "publish": {
+    "include": [
+      "mod.ts",
+      "src/**/*.ts",
+      "prebuilt/**",
+      "README.md",
+      "BENCHMARKS.md",
+      "COMPATIBILITY.md",
+      "NATIVE.md",
+      "ROADMAP.md",
+      "jsr.json",
+      "deno.json"
+    ]
+  }
+}

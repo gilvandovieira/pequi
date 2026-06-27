@@ -1,0 +1,9 @@
+[package]
+name = "pequi-native"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "pequi_native"
+crate-type = ["cdylib"]
