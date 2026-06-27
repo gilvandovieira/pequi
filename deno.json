@@ -47,6 +47,7 @@
     "bench:bundle:compare": "deno run --allow-read --allow-write scripts/compare-bundle-results.ts bench/reports/bundle-current.json",
     "bench:bundle:regression": "deno run --allow-read --allow-write scripts/assert-bundle-regression.ts",
     "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
     "lint": "deno lint",
     "native:build": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts",
     "native:check": "deno run --allow-read --allow-ffi scripts/check-native.ts"
@@ -61,7 +62,7 @@
   },
   "fmt": {
     "lineWidth": 100,
-    "exclude": ["dist/"]
+    "exclude": ["dist/", "index.html"]
   },
   "lint": {
     "exclude": ["dist/"],

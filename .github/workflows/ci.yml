@@ -21,12 +21,14 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          # Pinned for a deterministic toolchain — a floating v2.x can change fmt/lint output
+          # (notably the HTML formatter) and fail CI on files that pass locally.
+          deno-version: v2.8.3
 
       # Correctness gates. The pure TypeScript suite runs without --allow-ffi, so the native
       # backend tests skip cleanly; native is exercised separately via `deno task test:native`.
       - name: Format
-        run: deno fmt --check
+        run: deno task fmt:check
 
       - name: Lint
         run: deno task lint
