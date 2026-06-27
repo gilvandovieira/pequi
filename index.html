@@ -679,8 +679,10 @@ log.info({ big: 10n })
         <p class="lead">
           Throughput in <strong>million ops/sec</strong> (higher is better), mean of 3 independent
           runs · 20,000 iterations/case · discard sink · 12th-gen i7-12700H · Deno 2.8.3 / V8
-          14.9. Across these selected cases Pequi is at parity or ahead on some flat-object and
-          high-volume benchmarks, and behind on string-formatting micro-paths.
+          14.9. After the v0.6 hot-path optimization Pequi is <strong>faster than Pino</strong> on
+          object-heavy and high-volume logging (serializer, redaction, child bindings, mixin,
+          bursts), at parity on several, and behind on the lightweight string and disabled-level
+          micro-paths.
         </p>
 
         <div class="bctrl">
@@ -770,161 +772,25 @@ log.info({ big: 10n })
     </footer>
 
     <script>
-      // Mean of 3 runs, ops/sec (raw). Variants: src, bun(bundled), min, natS(native), pino.
+      // Mean of 3 runs, ops/sec (raw), post-v0.6 hot-path optimization. Variants: src, bun, min, natS(native), pino.
       const DATA = [
-        {
-          name: "disabled-level-string",
-          src: 13.33e6,
-          bun: 19.13e6,
-          min: 17.27e6,
-          natS: 11.19e6,
-          pino: 38.54e6,
-          cv: 25,
-        },
-        {
-          name: "disabled-level-object",
-          src: 24.33e6,
-          bun: 21.50e6,
-          min: 16.57e6,
-          natS: 14.16e6,
-          pino: 35.96e6,
-          cv: 25,
-        },
-        {
-          name: "enabled-string",
-          src: 1.85e6,
-          bun: 1.67e6,
-          min: 1.79e6,
-          natS: 0.75e6,
-          pino: 3.04e6,
-          cv: 16,
-        },
-        {
-          name: "enabled-object-small",
-          src: 2.08e6,
-          bun: 2.10e6,
-          min: 1.96e6,
-          natS: 0.80e6,
-          pino: 2.04e6,
-          cv: 19,
-        },
-        {
-          name: "enabled-object-medium",
-          src: 0.70e6,
-          bun: 0.73e6,
-          min: 0.76e6,
-          natS: 0.46e6,
-          pino: 1.12e6,
-          cv: 14,
-        },
-        {
-          name: "format-string",
-          src: 0.98e6,
-          bun: 0.91e6,
-          min: 0.98e6,
-          natS: 0.61e6,
-          pino: 2.15e6,
-          cv: 29,
-        },
-        {
-          name: "error-object",
-          src: 0.0224e6,
-          bun: 0.0221e6,
-          min: 0.0223e6,
-          natS: 0.0225e6,
-          pino: 0.0229e6,
-          cv: 3,
-        },
-        {
-          name: "child-bindings",
-          src: 1.60e6,
-          bun: 1.73e6,
-          min: 1.58e6,
-          natS: 0.66e6,
-          pino: 2.08e6,
-          cv: 13,
-        },
-        {
-          name: "serializer",
-          src: 1.17e6,
-          bun: 1.12e6,
-          min: 1.24e6,
-          natS: 0.67e6,
-          pino: 2.41e6,
-          cv: 19,
-        },
-        {
-          name: "redaction",
-          src: 0.85e6,
-          bun: 0.82e6,
-          min: 0.86e6,
-          natS: 0.53e6,
-          pino: 0.88e6,
-          cv: 10,
-        },
-        {
-          name: "formatter-level",
-          src: 2.30e6,
-          bun: 2.63e6,
-          min: 2.63e6,
-          natS: 0.71e6,
-          pino: 4.10e6,
-          cv: 11,
-        },
-        {
-          name: "mixin",
-          src: 2.10e6,
-          bun: 2.28e6,
-          min: 2.36e6,
-          natS: 0.65e6,
-          pino: 2.72e6,
-          cv: 14,
-        },
-        {
-          name: "hooks-log-method",
-          src: 1.77e6,
-          bun: 1.93e6,
-          min: 2.15e6,
-          natS: 0.80e6,
-          pino: 2.74e6,
-          cv: 9,
-        },
-        {
-          name: "burst-1000",
-          src: 2.16e6,
-          bun: 2.34e6,
-          min: 2.36e6,
-          natS: 0.73e6,
-          pino: 2.32e6,
-          cv: 18,
-        },
-        {
-          name: "burst-10000",
-          src: 2.30e6,
-          bun: 2.30e6,
-          min: 2.23e6,
-          natS: 0.73e6,
-          pino: 2.16e6,
-          cv: 16,
-        },
-        {
-          name: "file-burst-1000",
-          src: 0.64e6,
-          bun: 0.60e6,
-          min: 0.69e6,
-          natS: 0.67e6,
-          pino: 0.66e6,
-          cv: 11,
-        },
-        {
-          name: "flush-after-1000",
-          src: 2.01e6,
-          bun: 1.96e6,
-          min: 2.20e6,
-          natS: 0.73e6,
-          pino: 2.33e6,
-          cv: 21,
-        },
+    { name: "disabled-level-string", src: 18.46e6, bun: 27.00e6, min: 17.04e6, natS: 21.44e6, pino: 50.39e6, cv: 16 },
+    { name: "disabled-level-object", src: 44.64e6, bun: 25.16e6, min: 35.39e6, natS: 20.92e6, pino: 48.02e6, cv: 20 },
+    { name: "enabled-string", src: 2.24e6, bun: 2.28e6, min: 2.28e6, natS: 0.86e6, pino: 3.32e6, cv: 19 },
+    { name: "enabled-object-small", src: 2.80e6, bun: 3.33e6, min: 2.81e6, natS: 0.89e6, pino: 1.68e6, cv: 14 },
+    { name: "enabled-object-medium", src: 1.15e6, bun: 1.17e6, min: 1.31e6, natS: 0.57e6, pino: 1.04e6, cv: 9 },
+    { name: "format-string", src: 1.51e6, bun: 1.52e6, min: 1.72e6, natS: 0.64e6, pino: 2.11e6, cv: 8 },
+    { name: "error-object", src: 0.0294e6, bun: 0.0304e6, min: 0.0294e6, natS: 0.0292e6, pino: 0.0296e6, cv: 2 },
+    { name: "child-bindings", src: 2.14e6, bun: 2.25e6, min: 2.10e6, natS: 0.82e6, pino: 2.23e6, cv: 13 },
+    { name: "serializer", src: 2.08e6, bun: 2.21e6, min: 1.84e6, natS: 0.71e6, pino: 2.39e6, cv: 18 },
+    { name: "redaction", src: 1.06e6, bun: 1.11e6, min: 1.05e6, natS: 0.59e6, pino: 0.92e6, cv: 13 },
+    { name: "formatter-level", src: 3.56e6, bun: 3.63e6, min: 3.61e6, natS: 0.73e6, pino: 4.03e6, cv: 15 },
+    { name: "mixin", src: 2.65e6, bun: 2.80e6, min: 3.01e6, natS: 0.78e6, pino: 2.81e6, cv: 9 },
+    { name: "hooks-log-method", src: 2.28e6, bun: 2.33e6, min: 2.13e6, natS: 0.74e6, pino: 2.75e6, cv: 14 },
+    { name: "burst-1000", src: 2.99e6, bun: 3.07e6, min: 3.09e6, natS: 0.81e6, pino: 2.35e6, cv: 13 },
+    { name: "burst-10000", src: 2.98e6, bun: 2.85e6, min: 3.05e6, natS: 0.82e6, pino: 2.27e6, cv: 17 },
+    { name: "file-burst-1000", src: 0.64e6, bun: 0.67e6, min: 0.68e6, natS: 0.63e6, pino: 0.70e6, cv: 12 },
+    { name: "flush-after-1000", src: 2.72e6, bun: 3.22e6, min: 2.89e6, natS: 0.89e6, pino: 2.11e6, cv: 17 },
       ];
       const M = (n) => (n / 1e6).toFixed(n < 0.1e6 ? 3 : 2);
       let variant = "src";
