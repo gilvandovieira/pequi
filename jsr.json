@@ -1,6 +1,6 @@
 {
   "name": "@pequi/log",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -16,6 +16,7 @@
       "dist/pequi.bundle.js.map",
       "dist/pequi.bundle.d.ts",
       "prebuilt/**",
+      "assets/pequi-banner.png",
       "README.md",
       "BENCHMARKS.md",
       "COMPATIBILITY.md",

@@ -1,12 +1,20 @@
 // @ts-self-types="./pequi.bundle.d.ts"
 //#region src/destination.ts
 const encoder$1 = new TextEncoder();
+/** Create a stdout destination descriptor. */
 function stdoutDestination() {
 	return { type: "stdout" };
 }
+/** Create a stderr destination descriptor. */
 function stderrDestination() {
 	return { type: "stderr" };
 }
+/**
+* Create a file destination descriptor.
+*
+* @param path Filesystem path to write to.
+* @param options Set `append: false` to truncate instead of append.
+*/
 function fileDestination(path, options = {}) {
 	return {
 		type: "file",
@@ -14,21 +22,46 @@ function fileDestination(path, options = {}) {
 		append: options.append
 	};
 }
+/**
+* Create an in-memory destination descriptor.
+*
+* @param lines Array that receives each encoded line; defaults to a new array.
+*/
 function memoryDestination(lines = []) {
 	return {
 		type: "memory",
 		lines
 	};
 }
+/** Create a discard destination descriptor (writes go nowhere). */
 function discardDestination() {
 	return { type: "discard" };
 }
+/**
+* Type guard for a {@linkcode WritableDestination} (an object with a `write` method).
+*
+* @param value Candidate value.
+*/
 function isWritableDestination(value) {
 	return typeof value === "object" && value !== null && typeof value.write === "function";
 }
+/**
+* Type guard for a {@linkcode ConfiguredDestination} (an object with a string `type`).
+*
+* @param value Candidate value.
+*/
 function isConfiguredDestination(value) {
 	return typeof value === "object" && value !== null && typeof value.type === "string";
 }
+/**
+* Resolve a Pino-style destination argument into a {@linkcode WritableDestination}.
+*
+* Accepts `undefined`/`1`/`"stdout"` (stdout), `2`/`"stderr"` (stderr), a string path (file), a
+* custom writable, or a destination descriptor. Numeric file descriptors other than 1/2 throw.
+*
+* @param target The destination argument.
+* @returns A writable destination.
+*/
 function destination(target) {
 	if (target === void 0 || target === 1 || target === "stdout") return createDestinationSink(stdoutDestination());
 	if (target === 2 || target === "stderr") return createDestinationSink(stderrDestination());
@@ -37,6 +70,12 @@ function destination(target) {
 	if (isWritableDestination(target)) return target;
 	return createDestinationSink(target);
 }
+/**
+* Build the concrete {@linkcode DestinationSink} for a destination.
+*
+* @param target A destination descriptor or custom writable; defaults to stdout.
+* @returns The matching sink implementation.
+*/
 function createDestinationSink(target = stdoutDestination()) {
 	if (isWritableDestination(target)) return new WritableSink(target);
 	switch (target.type) {
@@ -123,6 +162,15 @@ var DiscardSink = class {
 
 //#endregion
 //#region src/backends/pure.ts
+/**
+* The pure TypeScript backend.
+*
+* The default {@linkcode Backend}: it appends the line ending and writes through a
+* {@linkcode DestinationSink}. Available directly as the `@pequi/log/pure` export.
+*
+* @module
+*/
+/** A {@linkcode Backend} that writes encoded lines to a destination sink in pure TypeScript. */
 var PureBackend = class {
 	#sink;
 	#lineEnding;
@@ -140,23 +188,45 @@ var PureBackend = class {
 		this.#sink.close();
 	}
 };
+/**
+* Construct a {@linkcode PureBackend}.
+*
+* @param options Destination and line-ending options.
+* @returns A new pure backend.
+*/
 function createPureBackend(options = {}) {
 	return new PureBackend(options);
 }
 
 //#endregion
 //#region src/errors.ts
+/**
+* Error types thrown by Pequi.
+*
+* {@linkcode PequiError} is the base class for every Pequi-specific error, so callers can catch all
+* of them with a single `instanceof` check. Native-backend failures use the
+* {@linkcode PequiNativeError} subtree.
+*
+* @module
+*/
+/** Base class for all Pequi-specific errors. */
 var PequiError = class extends Error {
+	/** @param message Human-readable error description. */
 	constructor(message) {
 		super(message);
 		this.name = "PequiError";
 	}
 };
+/** Raised when the Rust native backend fails during initialization, write, flush, or close. */
 var PequiNativeError = class extends PequiError {
 	statusCode;
 	operation;
 	destinationKind;
 	diagnostics;
+	/**
+	* @param message Human-readable error description.
+	* @param options Optional native context ({@linkcode PequiNativeErrorOptions}).
+	*/
 	constructor(message, options = {}) {
 		super(message);
 		this.name = "PequiNativeError";
@@ -167,19 +237,27 @@ var PequiNativeError = class extends PequiError {
 		if (options?.cause !== void 0) this.cause = options.cause;
 	}
 };
+/**
+* Raised in `native: "required"` mode when the native library cannot be loaded or initialized. In
+* `native: "auto"` mode this condition is captured in diagnostics and Pequi falls back to pure
+* TypeScript instead of throwing.
+*/
 var NativeBackendUnavailable = class extends PequiNativeError {
 	constructor(message, options) {
 		super(message, options);
 		this.name = "NativeBackendUnavailable";
 	}
 };
+/** Raised when a destination cannot be turned into a usable sink. */
 var UnsupportedDestinationError = class extends PequiError {
 	constructor(message) {
 		super(message);
 		this.name = "UnsupportedDestinationError";
 	}
 };
+/** Raised when an unknown level name is used. */
 var InvalidLogLevelError = class extends PequiError {
+	/** @param level The offending level name. */
 	constructor(level) {
 		super(`Invalid log level: ${level}`);
 		this.name = "InvalidLogLevelError";
@@ -188,6 +266,18 @@ var InvalidLogLevelError = class extends PequiError {
 
 //#endregion
 //#region src/backends/native.ts
+/**
+* The optional Rust native backend.
+*
+* Loads the prebuilt Rust `cdylib` through Deno FFI and exposes a {@linkcode Backend} whose
+* write/flush path is handled in Rust. The TypeScript layer still owns all formatting, so this
+* module only accepts already-encoded lines. Loading is lazy and platform-gated; in `native:
+* "auto"` a load failure falls back to pure TypeScript. Available directly as the
+* `@pequi/log/native` export.
+*
+* @module
+*/
+/** The native ABI version this build requires; checked against `pequi_abi_version()`. */
 const NATIVE_ABI_VERSION = 1;
 const supportedTargets = {
 	"linux-x86_64": "linux-x86_64-gnu",
@@ -197,6 +287,7 @@ const rustTargetTriples = {
 	"linux-x86_64": "x86_64-unknown-linux-gnu",
 	"linux-aarch64": "aarch64-unknown-linux-gnu"
 };
+/** The C ABI symbol table passed to `Deno.dlopen` (ABI {@linkcode NATIVE_ABI_VERSION}). */
 const nativeSymbols = {
 	pequi_abi_version: {
 		parameters: [],
@@ -243,15 +334,24 @@ const nativeSymbols = {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const emptyBuffer = /* @__PURE__ */ new Uint8Array(0);
+/** Resolve the Pequi target name for the current platform, or `undefined` if unsupported. */
 function resolveNativeTarget() {
 	if (Deno.build.os !== "linux") return;
 	return supportedTargets[`${Deno.build.os}-${Deno.build.arch}`];
 }
+/** Resolve the prebuilt library path for the current platform, or `undefined` if unsupported. */
 function resolveNativeLibraryPath() {
 	const target = resolveNativeTarget();
 	if (target === void 0) return;
 	return urlPath(new URL(`../../prebuilt/${target}/libpequi_log.so`, import.meta.url));
 }
+/**
+* List candidate library paths in load order: an explicit override, else the prebuilt path followed
+* by local Rust `target/release` build outputs.
+*
+* @param libraryPath Optional explicit path; when given, it is the only candidate.
+* @returns De-duplicated candidate paths.
+*/
 function resolveNativeLibraryCandidates(libraryPath) {
 	if (libraryPath !== void 0) return [libraryPath];
 	const prebuiltPath = resolveNativeLibraryPath();
@@ -261,6 +361,12 @@ function resolveNativeLibraryCandidates(libraryPath) {
 	if (rustTriple !== void 0) candidates.push(urlPath(new URL(`../../native/rust/target/${rustTriple}/release/libpequi_log.so`, import.meta.url)));
 	return [...new Set(candidates)];
 }
+/**
+* Collect platform and candidate-path information without attempting to load.
+*
+* @param libraryPath Optional explicit library path.
+* @returns The {@linkcode NativeLoadInfo} for the current platform.
+*/
 function getNativeLoadInfo(libraryPath) {
 	return {
 		os: Deno.build.os,
@@ -269,6 +375,14 @@ function getNativeLoadInfo(libraryPath) {
 		attemptedLibraryPaths: resolveNativeLibraryCandidates(libraryPath)
 	};
 }
+/**
+* Open the native library, trying each candidate path and validating the ABI version.
+*
+* @param libraryPath Optional explicit library path.
+* @param requestedMode The native mode, used for error context.
+* @returns The loaded library and its load info.
+* @throws {NativeBackendUnavailable} If no candidate loads with a matching ABI.
+*/
 function loadNativeLibrary(libraryPath, requestedMode = "required") {
 	const loadInfo = getNativeLoadInfo(libraryPath);
 	const failures = [];
@@ -314,6 +428,13 @@ function loadNativeLibrary(libraryPath, requestedMode = "required") {
 		nativeErrorMessage: failures.join("\n")
 	});
 }
+/**
+* Create a native backend and return it with {@linkcode NativeDiagnostics}.
+*
+* @param options Native backend options.
+* @returns The backend and diagnostics.
+* @throws {NativeBackendUnavailable} If the library cannot be loaded or initialized.
+*/
 function createNativeBackendResult(options = {}) {
 	const requestedMode = options.mode ?? "required";
 	const loadInfo = getNativeLoadInfo(options.libraryPath);
@@ -382,6 +503,14 @@ function normalizeBufferSize(bufferSize, loadInfo, requestedMode, destinationKin
 	if (!Number.isSafeInteger(bufferSize) || bufferSize < 0) throw nativeStartupError(`Invalid native buffer size: ${bufferSize}. Expected a non-negative safe integer.`, loadInfo, requestedMode, void 0, { nativeErrorMessage: "invalid native buffer size" });
 	return bufferSize;
 }
+/**
+* A {@linkcode Backend} backed by the Rust native sink over FFI.
+*
+* Encodes each line to UTF-8 and forwards it to `pequi_write`; {@linkcode NativeBackend.flush} and
+* {@linkcode NativeBackend.close} map to `pequi_flush` and `pequi_drop`. After close, further
+* writes throw {@linkcode PequiNativeError}. Construct it through {@linkcode createNativeBackend}
+* rather than directly.
+*/
 var NativeBackend = class {
 	#library;
 	#handle;
@@ -527,9 +656,34 @@ function urlPath(url) {
 
 //#endregion
 //#region src/backend.ts
+/**
+* Backend selection.
+*
+* Chooses between the pure TypeScript backend and the optional Rust native backend based on the
+* {@linkcode NativeMode}. {@linkcode resolveBackend} returns the chosen backend plus
+* {@linkcode NativeDiagnostics} (so callers can confirm native loaded), while
+* {@linkcode createBackend} returns just the backend for normal use.
+*
+* @module
+*/
+/**
+* Create a backend, discarding diagnostics. This is the normal entrypoint.
+*
+* @param options Backend selection and construction options.
+* @returns The selected backend.
+*/
 function createBackend(options = {}) {
 	return resolveBackend(options).backend;
 }
+/**
+* Resolve a backend and return it together with native diagnostics.
+*
+* In `native: "auto"`, a native load failure is captured in diagnostics and the pure backend is
+* returned; in `native: "required"`, the failure is rethrown.
+*
+* @param options Backend selection and construction options.
+* @returns The backend and its resolution diagnostics.
+*/
 function resolveBackend(options = {}) {
 	const requestedMode = options.native ?? false;
 	if (requestedMode === false) return createPureResolution(options, requestedMode);
@@ -583,18 +737,37 @@ function errorMessage(error) {
 
 //#endregion
 //#region src/bindings.ts
+/**
+* Build the base bindings for a root logger from its `base` and `name` options.
+*
+* @param options Name and base configuration.
+* @returns A new bindings object.
+*/
 function createBaseBindings(options = {}) {
 	const bindings = {};
 	if (options.base !== false && options.base !== null && options.base !== void 0) Object.assign(bindings, options.base);
 	if (options.name !== void 0) bindings.name = options.name;
 	return bindings;
 }
+/**
+* Merge parent bindings with child bindings; child keys win on conflict.
+*
+* @param parent The parent logger's bindings.
+* @param child The child logger's additional bindings.
+* @returns A new merged bindings object.
+*/
 function mergeBindings(parent, child) {
 	return {
 		...parent,
 		...child
 	};
 }
+/**
+* Return a shallow copy of a bindings object, so callers cannot mutate a logger's internal state.
+*
+* @param bindings The bindings to copy.
+* @returns A new object with the same keys and values.
+*/
 function copyBindings(bindings) {
 	return { ...bindings };
 }
@@ -672,9 +845,21 @@ function quote(value) {
 
 //#endregion
 //#region src/serializers.ts
+/**
+* Type guard for `Error` instances.
+*
+* @param value Candidate value.
+* @returns Whether `value` is an `Error`.
+*/
 function isError(value) {
 	return value instanceof Error;
 }
+/**
+* Serialize an Error (and its `cause` chain) into a plain {@linkcode SerializedError} object.
+*
+* @param error The error to serialize.
+* @returns A JSON-safe representation including own enumerable properties.
+*/
 function serializeError(error) {
 	const serialized = {
 		type: error.name || "Error",
@@ -685,16 +870,39 @@ function serializeError(error) {
 	for (const key of Object.keys(error)) serialized[key] = error[key];
 	return serialized;
 }
+/**
+* The standard `err` serializer: serialize Errors, pass other values through unchanged.
+*
+* @param value The value bound to an `err`/error key.
+* @returns A {@linkcode SerializedError} for Errors, otherwise `value`.
+*/
 function errSerializer(value) {
 	return isError(value) ? serializeError(value) : value;
 }
+/**
+* Like {@linkcode errSerializer}; `serializeError` already follows the `cause` chain, so this is
+* the `errWithCause` alias for Pino compatibility.
+*
+* @param value The value bound to an error key.
+* @returns A {@linkcode SerializedError} for Errors, otherwise `value`.
+*/
 function errWithCauseSerializer(value) {
 	return isError(value) ? serializeError(value) : value;
 }
+/** The built-in serializers exposed as `pequi.stdSerializers`. */
 const stdSerializers = {
 	err: errSerializer,
 	errWithCause: errWithCauseSerializer
 };
+/**
+* Serialize any Error values nested inside a log record, copy-on-write.
+*
+* Returns the original record untouched when nothing needs serializing (the common case); otherwise
+* returns a copy with Errors replaced, leaving the caller's objects unmutated.
+*
+* @param record The log record to scan.
+* @returns The record, or a copy with nested Errors serialized.
+*/
 function serializeErrorValues(record) {
 	if (!hasComplexValue(record)) return record;
 	const seen = /* @__PURE__ */ new WeakMap();
@@ -758,6 +966,13 @@ function isPlainObject(value) {
 	const proto = Object.getPrototypeOf(value);
 	return proto === Object.prototype || proto === null;
 }
+/**
+* Apply user {@linkcode Serializers} to matching top-level keys of a record, copy-on-write.
+*
+* @param record The log record.
+* @param serializers The configured serializers, or `undefined` for none.
+* @returns The record, or a copy with matching keys transformed.
+*/
 function applySerializers(record, serializers) {
 	if (serializers === void 0) return record;
 	let next = record;
@@ -770,6 +985,25 @@ function applySerializers(record, serializers) {
 
 //#endregion
 //#region src/format.ts
+/**
+* Argument normalization, printf-style message formatting, and JSON-line encoding.
+*
+* {@linkcode normalizeLogArguments} turns Pino-style call arguments into a log record,
+* {@linkcode formatMessage} implements the `quick-format-unescaped` placeholder rules, and
+* {@linkcode formatJsonLine} encodes a record to a single JSON line (with a safe fallback).
+*
+* @module
+*/
+/**
+* Normalize a level method's arguments into a log record, matching Pino's call shapes (merge
+* object, Error, and/or printf-style message with arguments).
+*
+* @param objOrMsg The first argument: a merge object, an Error, or a message string.
+* @param msg An optional message string when the first argument is an object/Error.
+* @param args Remaining printf-style format arguments.
+* @param options Field-name and prefix configuration.
+* @returns The assembled log record (before bindings, level, and time are added).
+*/
 function normalizeLogArguments(objOrMsg, msg, args, options = {
 	errorKey: "err",
 	messageKey: "msg",
@@ -794,6 +1028,10 @@ function normalizeLogArguments(objOrMsg, msg, args, options = {
 * Mirrors Pino's `quick-format-unescaped` rather than Node's `util.format`: `%i` floors,
 * `%d`/`%f` coerce with `Number`, `%j`/`%o`/`%O` JSON-encode (circular-safe), `%c` and unknown
 * tokens stay literal, and leftover arguments are dropped instead of appended.
+*
+* @param template The message template, possibly containing `%` placeholders.
+* @param args Values substituted into the placeholders, in order.
+* @returns The formatted message string.
 */
 function formatMessage(template, args) {
 	if (args.length === 0) return template;
@@ -832,6 +1070,16 @@ function formatToken(token, value) {
 		default: return safeStableStringify(value);
 	}
 }
+/**
+* Encode a log record as a single JSON line.
+*
+* Uses native `JSON.stringify` on the fast path and falls back to {@linkcode safeStableStringify}
+* when it throws (circular references, `BigInt`) or when depth/edge limits are requested.
+*
+* @param record The fully assembled log record.
+* @param options Optional depth/edge truncation limits.
+* @returns The encoded JSON line (without a trailing newline).
+*/
 function formatJsonLine(record, options = {}) {
 	if (options.depthLimit === void 0 && options.edgeLimit === void 0) try {
 		return JSON.stringify(record);
@@ -853,6 +1101,7 @@ function isLogObject(value) {
 
 //#endregion
 //#region src/levels.ts
+/** Core level name to numeric value (`trace`=10 … `fatal`=60, `silent`=`Infinity`). */
 const levels = {
 	trace: 10,
 	debug: 20,
@@ -862,6 +1111,7 @@ const levels = {
 	fatal: 60,
 	silent: Infinity
 };
+/** The six core level names in ascending severity order. */
 const CORE_LEVEL_NAMES = [
 	"trace",
 	"debug",
@@ -878,7 +1128,9 @@ const CORE_LEVEL_VALUES = {
 	error: 50,
 	fatal: 60
 };
+/** The default minimum level used when none is configured. */
 const DEFAULT_LEVEL = "info";
+/** The default {@linkcode Levels} registry exposed as `logger.levels` for the core levels. */
 const pinoLevels = {
 	labels: {
 		10: "trace",
@@ -898,23 +1150,50 @@ const pinoLevels = {
 	}
 };
 const levelNames = new Set(Object.keys(levels));
+/**
+* Type guard for a known core level name (including `silent`).
+*
+* @param value Candidate level name.
+* @returns Whether `value` is a built-in level.
+*/
 function isLogLevel(value) {
 	return levelNames.has(value);
 }
+/**
+* Resolve a core level name to its numeric value.
+*
+* @param level A core level name.
+* @returns The numeric value.
+* @throws {InvalidLogLevelError} If the name is not a core level.
+*/
 function levelToNumber(level) {
 	const value = levels[level];
 	if (value === void 0) throw new InvalidLogLevelError(level);
 	return value;
 }
+/**
+* Whether `candidateLevel` would emit given a logger set to `currentLevel` (ascending core levels).
+*
+* @param currentLevel The logger's active threshold.
+* @param candidateLevel The level being logged.
+*/
 function isLevelEnabled(currentLevel, candidateLevel) {
 	return levelToNumber(candidateLevel) >= levelToNumber(currentLevel);
 }
+/** Ascending comparison: a level emits when its value is at least the active threshold. */
 function ascCompare(candidate, active) {
 	return candidate >= active;
 }
+/** Descending comparison: a level emits when its value is at most the active threshold. */
 function descCompare(candidate, active) {
 	return candidate <= active;
 }
+/**
+* Build a per-logger {@linkcode LevelRegistry} from custom levels and a comparison policy.
+*
+* @param options Custom levels, `useOnlyCustomLevels`, and the comparison policy.
+* @returns The resolved registry used for level lookups and hot-path gating.
+*/
 function buildLevelRegistry(options = {}) {
 	const values = {
 		...options.useOnlyCustomLevels === true ? {} : { ...CORE_LEVEL_VALUES },
@@ -951,6 +1230,15 @@ function assertLevelConfigured(level, registry, useOnlyCustomLevels) {
 
 //#endregion
 //#region src/multistream.ts
+/**
+* Multi-destination fan-out.
+*
+* {@linkcode multistream} mirrors `pino.multistream`: it routes one logger's output to several
+* destinations, each filtered by its own level, with optional `dedupe` to send each line to a
+* single stream.
+*
+* @module
+*/
 const INFO = levelToNumber("info");
 function resolveLevel(level, fallback) {
 	if (level === void 0) return fallback;
@@ -1008,8 +1296,15 @@ function writeDeduped(streams, level, chunk) {
 
 //#endregion
 //#region src/redaction.ts
+/** The default replacement value when no censor is configured. */
 const DEFAULT_CENSOR = "[Redacted]";
 const IMMUTABLE_ROOT_KEYS = /* @__PURE__ */ new Set(["level", "time"]);
+/**
+* Normalize a {@linkcode RedactConfig} into a {@linkcode NormalizedRedact} with pre-parsed paths.
+*
+* @param config The redaction config, or `undefined`/`false` to disable.
+* @returns The normalized config, or `undefined` when redaction is disabled or has no paths.
+*/
 function normalizeRedact(config) {
 	if (config === void 0 || config === false) return;
 	const raw = Array.isArray(config) ? {
@@ -1126,11 +1421,24 @@ function cloneContainer(container) {
 
 //#endregion
 //#region src/logger.ts
-const version = "0.7.0";
+/**
+* The logger factory and core logging pipeline.
+*
+* This module assembles everything else: it normalizes options, builds the level registry,
+* serializers, redaction, and backend, and produces the {@linkcode Logger}. The {@linkcode pequi}
+* factory (aliased as {@linkcode pino}) is the package's main entrypoint, re-exported from
+* `@pequi/log`.
+*
+* @module
+*/
+/** The Pequi version string, also exposed as `logger.version`. */
+const version = "0.8.0";
+/** Well-known symbols, mirroring Pino's `pino.symbols`. */
 const symbols = {
 	serializers: Symbol.for("pino.serializers"),
 	serializersSym: Symbol.for("pino.serializers")
 };
+/** Built-in timestamp functions, mirroring Pino's `pino.stdTimeFunctions`. */
 const stdTimeFunctions = {
 	epochTime() {
 		return `,"time":${Date.now()}`;
@@ -1190,6 +1498,19 @@ function pequiFactory(optionsOrDestination = {}, maybeDestination) {
 		events: /* @__PURE__ */ new Map()
 	});
 }
+/**
+* The Pequi logger factory and the package's default export.
+*
+* Call it with options and/or a destination to create a {@linkcode Logger}; static helpers are
+* attached per {@linkcode PequiFactory}.
+*
+* @example
+* ```ts
+* import { pequi } from "@pequi/log";
+* const log = pequi({ level: "debug" });
+* log.debug("ready");
+* ```
+*/
 const pequi = Object.assign(pequiFactory, {
 	destination,
 	transport: notImplemented("transport"),
@@ -1200,6 +1521,7 @@ const pequi = Object.assign(pequiFactory, {
 	version,
 	levels: pinoLevels
 });
+/** Drop-in alias of {@linkcode pequi} for Pino-style `import pino from "@pequi/log"` usage. */
 const pino = pequi;
 function createLogger(state) {
 	const logger = {

@@ -1,13 +1,38 @@
+/**
+ * Argument normalization, printf-style message formatting, and JSON-line encoding.
+ *
+ * {@linkcode normalizeLogArguments} turns Pino-style call arguments into a log record,
+ * {@linkcode formatMessage} implements the `quick-format-unescaped` placeholder rules, and
+ * {@linkcode formatJsonLine} encodes a record to a single JSON line (with a safe fallback).
+ *
+ * @module
+ */
+
 import { type EncodeOptions, safeStableStringify } from "./encode.ts";
 import { isError } from "./serializers.ts";
 
+/** Field-name and prefix configuration for {@linkcode normalizeLogArguments}. */
 export interface NormalizeLogArgumentsOptions {
+  /** Key under which an Error argument is serialized. */
   errorKey: string;
+  /** Key under which the message string is placed. */
   messageKey: string;
+  /** String prepended to the message. */
   msgPrefix: string;
+  /** If set, log-object fields are nested under this key. */
   nestedKey?: string;
 }
 
+/**
+ * Normalize a level method's arguments into a log record, matching Pino's call shapes (merge
+ * object, Error, and/or printf-style message with arguments).
+ *
+ * @param objOrMsg The first argument: a merge object, an Error, or a message string.
+ * @param msg An optional message string when the first argument is an object/Error.
+ * @param args Remaining printf-style format arguments.
+ * @param options Field-name and prefix configuration.
+ * @returns The assembled log record (before bindings, level, and time are added).
+ */
 export function normalizeLogArguments(
   objOrMsg: unknown,
   msg: string | undefined,
@@ -53,6 +78,10 @@ export function normalizeLogArguments(
  * Mirrors Pino's `quick-format-unescaped` rather than Node's `util.format`: `%i` floors,
  * `%d`/`%f` coerce with `Number`, `%j`/`%o`/`%O` JSON-encode (circular-safe), `%c` and unknown
  * tokens stay literal, and leftover arguments are dropped instead of appended.
+ *
+ * @param template The message template, possibly containing `%` placeholders.
+ * @param args Values substituted into the placeholders, in order.
+ * @returns The formatted message string.
  */
 export function formatMessage(template: string, args: unknown[]): string {
   if (args.length === 0) {
@@ -109,6 +138,16 @@ function formatToken(token: string, value: unknown): string {
   }
 }
 
+/**
+ * Encode a log record as a single JSON line.
+ *
+ * Uses native `JSON.stringify` on the fast path and falls back to {@linkcode safeStableStringify}
+ * when it throws (circular references, `BigInt`) or when depth/edge limits are requested.
+ *
+ * @param record The fully assembled log record.
+ * @param options Optional depth/edge truncation limits.
+ * @returns The encoded JSON line (without a trailing newline).
+ */
 export function formatJsonLine(
   record: Record<string, unknown>,
   options: EncodeOptions = {},

@@ -1,11 +1,28 @@
+<p align="center">
+  <img src="./assets/pequi-banner.png" alt="Pequi" width="480" />
+</p>
+
+<p align="center">
+  <a href="https://gilvandovieira.github.io/pequi/">Landing page &amp; benchmarks</a>
+</p>
+
 # Pequi
 
-Pequi is a Deno-first structured logger published as `@pequi/log`. It provides a Pino-compatible
+Pequi is a Deno-first structured logger distributed as `@pequi/log`. It provides a Pino-compatible
 TypeScript API shape with a pure TypeScript backend by default.
 
 The TypeScript layer owns public API behavior, argument normalization, serializers, redaction,
 formatting, and JSON encoding. The optional Rust native backend remains a write/flush sink and is
 not required for normal use.
+
+> **Status: experimental — v0.8.0, pre-1.0.** Pequi is under active development. It implements a
+> Pino-compatible subset verified against an oracle pinned to `npm:pino@10.3.1` (see
+> [COMPATIBILITY.md](./COMPATIBILITY.md)), but the API may still change before 1.0, and not every
+> Pino feature is covered. Early releases are published to [JSR](https://jsr.io/@pequi/log) from the
+> release workflow below — pin an exact version and expect breaking changes between minor versions
+> until 1.0. The Rust native backend is optional and only Linux x64 ships a runtime-tested artifact
+> today; ARM64 and Windows are cross-buildable but not yet runtime-tested (see
+> [NATIVE.md](./NATIVE.md)).
 
 ## Imports
 
@@ -120,6 +137,18 @@ const optionalNative = pequi({ native: "auto" });
 const requiredNative = pequi({ native: "required" });
 ```
 
+### Native targets
+
+Pequi's native Rust backend currently builds artifacts for:
+
+- Linux x64
+- Linux ARM64
+- Windows x64 GNU
+
+Native remains optional and pure TypeScript remains the default fallback. Cross-built artifacts are
+not claimed as fully runtime-tested until they run on a matching OS/architecture. See
+[NATIVE.md](./NATIVE.md) for the cross-compilation, build, and verification details.
+
 Build and check the Rust backend locally:
 
 ```sh
@@ -158,3 +187,17 @@ deno task bench
 ```
 
 The compatibility oracle is pinned to `npm:pino@10.3.1` and is used only in tests.
+
+## Releases
+
+Pequi publishes to [JSR](https://jsr.io/@pequi/log) from `.github/workflows/publish.yml`. Because
+the project is pre-1.0, releases are deliberate rather than automatic:
+
+1. Bump the version in `deno.json` and `jsr.json` (and `src/logger.ts`), run `deno task bundle`, and
+   commit the updated `dist/` artifacts.
+2. Create a GitHub Release tagged `vX.Y.Z` (matching the package version).
+3. The publish workflow re-runs the release gates and then runs `deno publish` to JSR.
+
+The workflow authenticates to JSR with GitHub OIDC (no token secret), so the JSR package must be
+linked to this repository once before the first publish. It can also be triggered manually with
+`workflow_dispatch`; a release-triggered run fails if the tag does not match the `jsr.json` version.

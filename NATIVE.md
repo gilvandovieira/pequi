@@ -100,10 +100,13 @@ diagnostics and Pequi falls back to the pure TypeScript backend.
 
 ## Targets
 
-Tier 1 targets:
+Configured targets and their prebuilt artifacts:
 
-- `linux-x86_64-gnu`
-- `linux-aarch64-gnu`
+| Pequi target         | Rust target triple          | Artifact          |
+| -------------------- | --------------------------- | ----------------- |
+| `linux-x86_64-gnu`   | `x86_64-unknown-linux-gnu`  | `libpequi_log.so` |
+| `linux-aarch64-gnu`  | `aarch64-unknown-linux-gnu` | `libpequi_log.so` |
+| `windows-x86_64-gnu` | `x86_64-pc-windows-gnu`     | `pequi_log.dll`   |
 
 Expected prebuilt layout:
 
@@ -113,10 +116,98 @@ prebuilt/
     libpequi_log.so
   linux-aarch64-gnu/
     .gitkeep
+  windows-x86_64-gnu/
+    .gitkeep
 ```
 
-The current build script builds only the host Linux target and copies the artifact into the matching
-prebuilt directory. Linux ARM64 release hardening and cross-compilation are planned.
+Only `linux-x86_64-gnu` ships a committed, runtime-tested artifact today. `linux-aarch64-gnu` and
+`windows-x86_64-gnu` are cross-buildable from Linux x64 but are **not** claimed as runtime-tested
+until they run on a matching OS/CPU (see "Cross-compilation").
+
+## Cross-compilation
+
+Rust can build native dynamic libraries for several targets from one host, and Pequi uses this to
+produce prebuilt native artifacts.
+
+**Cross-building is not the same as runtime testing.** Building an artifact for a target only means
+the bytes exist; it says nothing about whether they run. Deno FFI can only load a dynamic library
+built for the **current** OS and CPU architecture:
+
+- Linux x64 **cannot** load Linux ARM64 artifacts.
+- Linux **cannot** load Windows `.dll` files.
+- Windows **cannot** load Linux `.so` files.
+
+So a Linux x64 machine can _build_ a Linux x64 `.so`, a Linux ARM64 `.so`, and a Windows x64 `.dll`,
+but that same Linux x64 Deno process can only _load and test_ the Linux x64 `.so`.
+
+| Pequi target         | Rust target triple          | Artifact          | Build from Linux x64?     | Runtime test on Linux x64? |
+| -------------------- | --------------------------- | ----------------- | ------------------------- | -------------------------- |
+| `linux-x86_64-gnu`   | `x86_64-unknown-linux-gnu`  | `libpequi_log.so` | yes                       | yes                        |
+| `linux-aarch64-gnu`  | `aarch64-unknown-linux-gnu` | `libpequi_log.so` | yes, with cross linker    | no                         |
+| `windows-x86_64-gnu` | `x86_64-pc-windows-gnu`     | `pequi_log.dll`   | yes, with MinGW toolchain | no                         |
+
+Runtime testing each target needs a matching runner: Linux x64 for `linux-x86_64-gnu`, Linux ARM64
+for `linux-aarch64-gnu`, Windows x64 for `windows-x86_64-gnu`.
+
+## Required toolchains
+
+Add the Rust targets you want to build:
+
+```sh
+rustup target add x86_64-unknown-linux-gnu
+rustup target add aarch64-unknown-linux-gnu
+rustup target add x86_64-pc-windows-gnu
+```
+
+The Linux ARM64 and Windows cross-builds also need system cross linkers. Examples (install only what
+you need):
+
+```sh
+# Arch / CachyOS
+sudo pacman -S aarch64-linux-gnu-gcc mingw-w64-gcc
+
+# Debian / Ubuntu
+sudo apt install gcc-aarch64-linux-gnu gcc-mingw-w64-x86-64
+```
+
+## Build commands
+
+```sh
+deno task native:build            # build the host target
+deno task native:build:x64        # build Linux x64
+deno task native:build:aarch64    # build Linux ARM64
+deno task native:build:windows    # build Windows x64 GNU
+deno task native:build:all        # build all configured native targets
+deno task native:verify:artifacts # verify expected artifacts exist and look correct
+```
+
+A cross-build fails with a clear cargo error if its Rust target or system linker is missing.
+
+## What verification means
+
+`deno task native:verify:artifacts` checks, for each configured target, that the artifact:
+
+- exists,
+- has the expected file name,
+- lives in the expected `prebuilt/<target>/` folder,
+- carries the expected architecture metadata, when available (ELF/PE header machine id),
+- has the expected extension (`.so` or `.dll`).
+
+It does **not** prove:
+
+- that Deno FFI can load the artifact on the current machine,
+- that the target platform's runtime behavior is correct,
+- that file I/O works on that platform,
+- that flush/close behavior works on that platform.
+
+Runtime testing requires a matching runner:
+
+- Linux x64 runner for `linux-x86_64-gnu`,
+- Linux ARM64 runner for `linux-aarch64-gnu`,
+- Windows x64 runner for `windows-x86_64-gnu`.
+
+Missing cross artifacts are reported but tolerated; verification fails only when an artifact that is
+present has the wrong name, extension, or architecture.
 
 ## ABI
 
@@ -153,16 +244,16 @@ Status codes:
 
 File destinations are opened in append/create mode and are not truncated by the native backend.
 
-## Build And Test
+## Checking And Testing
 
 ```sh
-deno task native:build
-deno task native:check
-deno task test:native
+deno task native:check   # load the host artifact through FFI and sanity-check it
+deno task test:native    # run the native FFI test suite on the host
 ```
 
 `native:check` and `test:native` require `--allow-ffi`. Normal tests still run without `--allow-ffi`
-and native auto mode falls back cleanly when permission is missing.
+and native auto mode falls back cleanly when permission is missing. See "Build commands" above for
+building and verifying artifacts.
 
 ## Benchmarks
 

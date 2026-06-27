@@ -1,9 +1,22 @@
+/**
+ * Field redaction.
+ *
+ * Parses Pino-style redaction paths (dot, bracket, quoted, and wildcard syntax) once at
+ * construction via {@linkcode normalizeRedact}, then applies them copy-on-write with
+ * {@linkcode redactRecord} so the caller's logged objects are never mutated.
+ *
+ * @module
+ */
+
 import type { RedactConfig, RedactOptions } from "./types.ts";
 
+/** The default replacement value when no censor is configured. */
 export const DEFAULT_CENSOR = "[Redacted]";
 
+/** A censor: a literal replacement string, or a function of the value and its resolved path. */
 export type Censor = string | ((value: unknown, path: string[]) => unknown);
 
+/** A {@linkcode RedactConfig} normalized into pre-parsed path segments, censor, and remove flag. */
 export interface NormalizedRedact {
   /** Each path pre-parsed into segments; `"*"` is the wildcard segment. */
   paths: string[][];
@@ -15,6 +28,12 @@ export interface NormalizedRedact {
 // explicit path or a root wildcard.
 const IMMUTABLE_ROOT_KEYS = new Set(["level", "time"]);
 
+/**
+ * Normalize a {@linkcode RedactConfig} into a {@linkcode NormalizedRedact} with pre-parsed paths.
+ *
+ * @param config The redaction config, or `undefined`/`false` to disable.
+ * @returns The normalized config, or `undefined` when redaction is disabled or has no paths.
+ */
 export function normalizeRedact(config: RedactConfig | undefined): NormalizedRedact | undefined {
   if (config === undefined || config === false) {
     return undefined;

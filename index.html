@@ -8,6 +8,16 @@
       name="description"
       content="Pequi is a Deno-first structured logger with a Pino-compatible API shape, oracle-tested behavior, safe JSON-line encoding, and an optional Rust sink for real I/O. Benchmarked against pino@10.3.1."
     />
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="apple-touch-icon" href="./assets/pequi-mark.png" />
+    <meta property="og:title" content="Pequi — Pino-compatible structured logging for Deno" />
+    <meta
+      property="og:description"
+      content="A Deno-first structured logger with a Pino-compatible API shape, oracle-tested behavior, and an optional Rust I/O sink."
+    />
+    <meta property="og:image" content="./assets/pequi-banner.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://gilvandovieira.github.io/pequi/" />
     <style>
       :root {
         --bg: #0c0d10;
@@ -125,6 +135,15 @@
       .pill b {
         color: var(--amber);
         font-weight: 600;
+      }
+      .hero-logo {
+        display: block;
+        width: 76px;
+        height: 76px;
+        margin: 0 0 18px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: var(--bg-soft);
       }
       .wordmark {
         font-size: clamp(52px, 9vw, 92px);
@@ -631,6 +650,13 @@
     <header class="hero">
       <div class="wrap hero-grid">
         <div>
+          <img
+            class="hero-logo"
+            src="./assets/pequi-mark.png"
+            alt="Pequi logo"
+            width="76"
+            height="76"
+          />
           <span class="pill"
           >Deno-first · <b>Pino-compatible</b> · oracle-tested vs pino@10.3.1</span>
           <div class="wordmark">Peq<span>u</span>i</div>

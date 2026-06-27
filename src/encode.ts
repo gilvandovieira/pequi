@@ -1,3 +1,15 @@
+/**
+ * Safe, stable JSON encoding.
+ *
+ * {@linkcode safeStableStringify} mirrors `JSON.stringify` output but survives circular references,
+ * `BigInt`, and other inputs that make `JSON.stringify` throw, while preserving insertion order to
+ * match Pino's line output. It is the fallback path used by the formatter when a fast
+ * `JSON.stringify` is not safe.
+ *
+ * @module
+ */
+
+/** Truncation limits for {@linkcode safeStableStringify}. */
 export interface EncodeOptions {
   /**
    * Maximum object/array nesting depth before deeper values are replaced with `"[Object]"` or

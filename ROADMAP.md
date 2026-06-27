@@ -322,6 +322,8 @@ Status — shipped:
 
 ## v0.8 — Bundle And Native Release Hardening
 
+Status — shipped (version bumped to 0.8.0).
+
 Goal: prepare source, bundle, and native paths for publishing and release.
 
 Deliverables:
@@ -342,6 +344,38 @@ Acceptance criteria:
 - Native Rust remains optional.
 - Normal users can import `@pequi/log` without native permissions.
 - Advanced users can import `@pequi/log/bundle` if the export is enabled.
+
+Confirmation (verified against the current tree):
+
+- **JSR export shape** — `jsr.json` exports `.` → `mod.ts`, `./bundle` → `dist/pequi.bundle.js`,
+  `./pure` → `src/backends/pure.ts`, `./native` → `src/backends/native.ts`.
+  `deno publish
+  --dry-run` validates the package and reports **no slow types**.
+- **Bundle type support** — `dist/pequi.bundle.d.ts` re-exports `mod.ts` (named + default), so the
+  `./bundle` export is fully typed; checked by `tests/types/bundle-export.test.ts`. The bundle is
+  only exposed because that type shim exists.
+- **Native optional** — `native: false | "auto" | "required"`; the default suite runs without
+  `--allow-ffi` and native auto-falls back cleanly. `deno task test:native` exercises the real Rust
+  sink where the library and FFI are available.
+- **No accidental reports published** — `publish.include` is an allowlist; the dry-run file list
+  contains no `reports/*.json` / `bench/reports/*.json` and no `dist/pequi.bundle.min.js` (the
+  experimental minified bundle stays gitignored and unexported).
+- **Docs** — `DISTRIBUTION.md` (entry points + CI policy), `NATIVE.md` ("When to Use Native"), and
+  `README.md` (bundle/native sections) describe both the bundle and native paths.
+- **CI** — `.github/workflows/ci.yml` runs fmt/lint/check, `test` (source + bundle equivalence +
+  type-export + import smoke), `test:native` (native where available), `bundle:verify` (freshness),
+  and `bench:smoke` (every variant ran and passed its correctness gate, via
+  `scripts/bench-smoke.ts`).
+
+v0.8 also includes native distribution clarification (documentation, not new runtime support):
+
+- Document the cross-compilation targets (`linux-x86_64-gnu`, `linux-aarch64-gnu`,
+  `windows-x86_64-gnu`).
+- Document artifact names and paths (`prebuilt/<target>/libpequi_log.so` or `…/pequi_log.dll`).
+- Document the build vs runtime-test distinction (`native:verify:artifacts` checks the artifact; it
+  does not prove FFI load or platform behavior).
+- Document the required Rust targets and system cross linkers.
+- Avoid overclaiming ARM64 or Windows support before runtime CI on matching OS/architecture exists.
 
 ## v1.0 — Stable Backend Logger
 

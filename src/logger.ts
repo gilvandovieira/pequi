@@ -1,3 +1,14 @@
+/**
+ * The logger factory and core logging pipeline.
+ *
+ * This module assembles everything else: it normalizes options, builds the level registry,
+ * serializers, redaction, and backend, and produces the {@linkcode Logger}. The {@linkcode pequi}
+ * factory (aliased as {@linkcode pino}) is the package's main entrypoint, re-exported from
+ * `@pequi/log`.
+ *
+ * @module
+ */
+
 import { createBackend } from "./backend.ts";
 import { copyBindings, createBaseBindings, mergeBindings } from "./bindings.ts";
 import { destination as createDestination, isWritableDestination } from "./destination.ts";
@@ -34,23 +45,32 @@ import type {
   TimestampOption,
 } from "./types.ts";
 
-export const version = "0.7.0";
+/** The Pequi version string, also exposed as `logger.version`. */
+export const version = "0.8.0";
 
+/** Well-known symbols exposed as `pequi.symbols`, mirroring Pino. */
 export interface PequiSymbols {
+  /** The serializers symbol. */
   serializers: symbol;
+  /** Alias of {@linkcode PequiSymbols.serializers} for Pino compatibility. */
   serializersSym: symbol;
 }
 
+/** The built-in timestamp functions exposed as `pequi.stdTimeFunctions`. */
 export interface PequiStdTimeFunctions {
+  /** Returns the epoch-millis time fragment (`,"time":<ms>`). */
   epochTime(): string;
+  /** Returns the ISO-8601 time fragment (`,"time":"<iso>"`). */
   isoTime(): string;
 }
 
+/** Well-known symbols, mirroring Pino's `pino.symbols`. */
 export const symbols: PequiSymbols = {
   serializers: Symbol.for("pino.serializers"),
   serializersSym: Symbol.for("pino.serializers"),
 };
 
+/** Built-in timestamp functions, mirroring Pino's `pino.stdTimeFunctions`. */
 export const stdTimeFunctions: PequiStdTimeFunctions = {
   epochTime(): string {
     return `,"time":${Date.now()}`;
@@ -95,17 +115,35 @@ type LoggerOptionsWithNativeOverrides = LoggerOptions & {
 type EventListener = (...args: unknown[]) => void;
 type EventRegistry = Map<string, Set<EventListener>>;
 
+/**
+ * The callable {@linkcode pequi} factory and its attached helpers, mirroring Pino's default export.
+ *
+ * Call it with options and/or a destination to build a {@linkcode Logger}; the attached members
+ * ({@linkcode PequiFactory.destination}, {@linkcode PequiFactory.multistream}, etc.) mirror Pino's
+ * static surface.
+ */
 export interface PequiFactory {
+  /** Create a logger from options. */
   (options?: LoggerOptions): Logger;
+  /** Create a logger writing to `destination`. */
   (destination: Destination): Logger;
+  /** Create a logger from options writing to `destination`. */
   (options: LoggerOptions, destination: Destination): Logger;
+  /** Resolve a destination argument into a writable (see {@linkcode destination}). */
   destination: typeof createDestination;
+  /** Pino transport entrypoint; not implemented in Pequi (throws when called). */
   transport: () => never;
+  /** Fan output out to multiple destinations (see {@linkcode multistream}). */
   multistream: typeof multistream;
+  /** The built-in serializers. */
   stdSerializers: typeof stdSerializers;
+  /** The built-in timestamp functions. */
   stdTimeFunctions: typeof stdTimeFunctions;
+  /** Well-known symbols. */
   symbols: typeof symbols;
+  /** The Pequi version string. */
   version: string;
+  /** The default level registry. */
   levels: typeof pinoLevels;
 }
 
@@ -166,6 +204,19 @@ function pequiFactory(
   });
 }
 
+/**
+ * The Pequi logger factory and the package's default export.
+ *
+ * Call it with options and/or a destination to create a {@linkcode Logger}; static helpers are
+ * attached per {@linkcode PequiFactory}.
+ *
+ * @example
+ * ```ts
+ * import { pequi } from "@pequi/log";
+ * const log = pequi({ level: "debug" });
+ * log.debug("ready");
+ * ```
+ */
 export const pequi = Object.assign(pequiFactory, {
   destination: createDestination,
   transport: notImplemented("transport"),
@@ -177,6 +228,7 @@ export const pequi = Object.assign(pequiFactory, {
   levels: pinoLevels,
 }) as PequiFactory;
 
+/** Drop-in alias of {@linkcode pequi} for Pino-style `import pino from "@pequi/log"` usage. */
 export const pino = pequi;
 
 function createLogger(state: LoggerState): Logger {

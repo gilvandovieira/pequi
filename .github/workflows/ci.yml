@@ -25,22 +25,44 @@ jobs:
           # (notably the HTML formatter) and fail CI on files that pass locally.
           deno-version: v2.8.3
 
-      # Correctness gates. The pure TypeScript suite runs without --allow-ffi, so the native
-      # backend tests skip cleanly; native is exercised separately via `deno task test:native`.
+      # Correctness gates. `deno task test` runs the pure TypeScript suite without --allow-ffi, so
+      # native backend tests skip cleanly there; native is exercised for real in the step below.
       - name: Format
         run: deno task fmt:check
 
       - name: Lint
         run: deno task lint
 
+      # Documentation gate (also enforced locally via the .githooks/pre-commit hook): every library
+      # module must have a module doc (100%) and at least 80% of exported symbols must have JSDoc.
+      - name: Doc coverage
+        run: deno task doc:coverage
+
       - name: Type-check
         run: deno task check
 
+      # Source tests + bundle equivalence/type-export + import smoke (native tests skip without FFI).
       - name: Test
         run: deno task test
+
+      # Native tests where available: the ubuntu-x86_64 runner ships the committed prebuilt
+      # `.so`, so the Rust sink loads via FFI and its lifecycle/equivalence tests run for real.
+      - name: Native tests
+        run: deno task test:native
+
+      # Artifact shape gate (not a runtime test): confirms each present prebuilt artifact has the
+      # expected name, folder, extension, and architecture metadata. Missing cross artifacts
+      # (ARM64/Windows) are tolerated; see NATIVE.md "What verification means".
+      - name: Native artifacts
+        run: deno task native:verify:artifacts
 
       # Distribution gate: the committed `dist/` bundle (published as @pequi/log/bundle) must be a
       # byte-identical, deterministic build of the current source. Fails if someone edited source
       # without running `deno task bundle`.
       - name: Bundle freshness
         run: deno task bundle:verify
+
+      # Benchmark smoke: run every bundle/source/native/pino variant at a tiny iteration count and
+      # assert each ran and passed its correctness gate, so a crashed benchmark fails the build.
+      - name: Benchmark smoke
+        run: deno task bench:smoke
