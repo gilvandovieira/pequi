@@ -102,6 +102,8 @@ export interface LevelRegistry {
   values: Record<string, number>;
   /** Numeric value to level name, matching Pino's `logger.levels.labels`. */
   labels: Record<number, string>;
+  /** True when the comparison is plain ascending, enabling a baked numeric gate on the hot path. */
+  isAsc: boolean;
   has(name: string): boolean;
   valueOf(name: string): number;
   isEnabled(activeLevel: string, candidateLevel: string): boolean;
@@ -125,6 +127,7 @@ export function buildLevelRegistry(options: LevelRegistryOptions = {}): LevelReg
   const registry: LevelRegistry = {
     values,
     labels,
+    isAsc: compare === ascCompare,
     has(name: string): boolean {
       return name === "silent" || Object.hasOwn(values, name);
     },

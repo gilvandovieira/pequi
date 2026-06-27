@@ -695,10 +695,17 @@ const stdSerializers = {
 };
 function serializeErrorValues(record) {
 	if (!hasComplexValue(record)) return record;
-	const next = {};
 	const seen = /* @__PURE__ */ new WeakMap();
-	for (const [key, value] of Object.entries(record)) next[key] = serializeValue(value, seen);
-	return next;
+	let copy = null;
+	for (const key in record) {
+		const value = record[key];
+		const serialized = serializeValue(value, seen);
+		if (serialized !== value) {
+			if (copy === null) copy = { ...record };
+			copy[key] = serialized;
+		}
+	}
+	return copy ?? record;
 }
 function hasComplexValue(record) {
 	for (const key in record) {
@@ -713,16 +720,37 @@ function serializeValue(value, seen) {
 	const existing = seen.get(value);
 	if (existing !== void 0) return existing;
 	if (Array.isArray(value)) {
-		const result = [];
-		seen.set(value, result);
-		for (const item of value) result.push(serializeValue(item, seen));
-		return result;
+		seen.set(value, value);
+		let copy = null;
+		for (let index = 0; index < value.length; index++) {
+			const item = value[index];
+			const serialized = serializeValue(item, seen);
+			if (serialized !== item) {
+				if (copy === null) {
+					copy = value.slice();
+					seen.set(value, copy);
+				}
+				copy[index] = serialized;
+			}
+		}
+		return copy ?? value;
 	}
 	if (!isPlainObject(value)) return value;
-	const next = {};
-	seen.set(value, next);
-	for (const [key, nested] of Object.entries(value)) next[key] = serializeValue(nested, seen);
-	return next;
+	seen.set(value, value);
+	let copy = null;
+	const source = value;
+	for (const key in source) {
+		const nested = source[key];
+		const serialized = serializeValue(nested, seen);
+		if (serialized !== nested) {
+			if (copy === null) {
+				copy = { ...source };
+				seen.set(value, copy);
+			}
+			copy[key] = serialized;
+		}
+	}
+	return copy ?? value;
 }
 function isPlainObject(value) {
 	const proto = Object.getPrototypeOf(value);
@@ -731,9 +759,9 @@ function isPlainObject(value) {
 function applySerializers(record, serializers) {
 	if (serializers === void 0) return record;
 	let next = record;
-	for (const [key, serializer] of Object.entries(serializers)) if (Object.hasOwn(record, key)) {
+	for (const key in serializers) if (Object.hasOwn(record, key)) {
 		if (next === record) next = { ...record };
-		next[key] = serializer(next[key]);
+		next[key] = serializers[key](next[key]);
 	}
 	return next;
 }
@@ -767,28 +795,28 @@ function normalizeLogArguments(objOrMsg, msg, args, options = {
 */
 function formatMessage(template, args) {
 	if (args.length === 0) return template;
+	let pct = template.indexOf("%");
+	if (pct === -1) return template;
+	const limit = template.length - 1;
 	let result = "";
 	let argIndex = 0;
-	let index = 0;
-	while (index < template.length) {
-		if (template[index] === "%" && index + 1 < template.length) {
-			const token = template[index + 1];
-			if (token === "%") {
-				result += "%";
-				index += 2;
-				continue;
-			}
-			if (argIndex < args.length && isFormatToken(token)) {
-				result += formatToken(token, args[argIndex]);
-				argIndex++;
-				index += 2;
-				continue;
-			}
+	let last = 0;
+	while (pct !== -1 && pct < limit) {
+		const token = template[pct + 1];
+		if (token === "%") {
+			result += template.slice(last, pct) + "%";
+			last = pct + 2;
+		} else if (argIndex < args.length && isFormatToken(token)) {
+			result += template.slice(last, pct) + formatToken(token, args[argIndex]);
+			argIndex++;
+			last = pct + 2;
+		} else {
+			pct = template.indexOf("%", pct + 1);
+			continue;
 		}
-		result += template[index];
-		index++;
+		pct = template.indexOf("%", last);
 	}
-	return result;
+	return last === 0 ? template : result + template.slice(last);
 }
 function isFormatToken(token) {
 	return token === "s" || token === "d" || token === "i" || token === "f" || token === "j" || token === "o" || token === "O";
@@ -896,6 +924,7 @@ function buildLevelRegistry(options = {}) {
 	const registry = {
 		values,
 		labels,
+		isAsc: compare === ascCompare,
 		has(name) {
 			return name === "silent" || Object.hasOwn(values, name);
 		},
@@ -1003,8 +1032,9 @@ function normalizeRedact(config) {
 */
 function redactRecord(record, redact) {
 	if (redact === void 0) return record;
-	for (const segments of redact.paths) applyRedaction(record, segments, 0, [], redact);
-	return record;
+	let result = record;
+	for (const segments of redact.paths) result = redactContainer(result, segments, 0, [], redact);
+	return result;
 }
 /**
 * Splits a redaction path into segments, supporting dot paths (`a.b`), array/bracket access
@@ -1057,27 +1087,39 @@ function parsePath(path) {
 	flush();
 	return segments;
 }
-function applyRedaction(target, segments, index, trail, redact) {
-	if (typeof target !== "object" || target === null) return;
+/**
+* Copy-on-write redaction: returns `target` unchanged, or a shallow copy of each container along the
+* matched path with the leaf censored/removed. The caller's logged objects are never mutated, which
+* matters now that the serializer pass no longer always hands redaction a private deep copy.
+*/
+function redactContainer(target, segments, index, trail, redact) {
+	if (typeof target !== "object" || target === null) return target;
 	const container = target;
 	const segment = segments[index];
 	const isLast = index === segments.length - 1;
 	const keys = segment === "*" ? Object.keys(container) : Object.hasOwn(container, segment) ? [segment] : [];
+	if (keys.length === 0) return target;
+	let copy = null;
 	for (const key of keys) {
 		const nextTrail = [...trail, key];
 		if (isLast) {
 			if (nextTrail.length === 1 && IMMUTABLE_ROOT_KEYS.has(key)) continue;
-			redactKey(container, key, nextTrail, redact);
-		} else applyRedaction(container[key], segments, index + 1, nextTrail, redact);
+			if (copy === null) copy = cloneContainer(container);
+			if (redact.remove) delete copy[key];
+			else copy[key] = typeof redact.censor === "function" ? redact.censor(copy[key], nextTrail) : redact.censor;
+		} else {
+			const child = container[key];
+			const next = redactContainer(child, segments, index + 1, nextTrail, redact);
+			if (next !== child) {
+				if (copy === null) copy = cloneContainer(container);
+				copy[key] = next;
+			}
+		}
 	}
+	return copy ?? target;
 }
-function redactKey(container, key, trail, redact) {
-	if (redact.remove) {
-		delete container[key];
-		return;
-	}
-	const current = container[key];
-	container[key] = typeof redact.censor === "function" ? redact.censor(current, trail) : redact.censor;
+function cloneContainer(container) {
+	return Array.isArray(container) ? container.slice() : { ...container };
 }
 
 //#endregion
@@ -1115,6 +1157,7 @@ function pequiFactory(optionsOrDestination = {}, maybeDestination) {
 	return createLogger({
 		backend,
 		level,
+		levelValue: levelRegistry.valueOf(level),
 		levels: levelRegistry,
 		customLevels: options.customLevels,
 		useOnlyCustomLevels: options.useOnlyCustomLevels,
@@ -1158,12 +1201,12 @@ const pequi = Object.assign(pequiFactory, {
 const pino = pequi;
 function createLogger(state) {
 	const logger = {
-		trace: createLogMethod(state, "trace"),
-		debug: createLogMethod(state, "debug"),
-		info: createLogMethod(state, "info"),
-		warn: createLogMethod(state, "warn"),
-		error: createLogMethod(state, "error"),
-		fatal: createLogMethod(state, "fatal"),
+		trace: createLogMethod(state, "trace", 10),
+		debug: createLogMethod(state, "debug", 20),
+		info: createLogMethod(state, "info", 30),
+		warn: createLogMethod(state, "warn", 40),
+		error: createLogMethod(state, "error", 50),
+		fatal: createLogMethod(state, "fatal", 60),
 		silent: () => {},
 		child(bindings, options = {}) {
 			const childPrefix = options.msgPrefix === void 0 ? state.msgPrefix : `${state.msgPrefix}${options.msgPrefix}`;
@@ -1183,6 +1226,7 @@ function createLogger(state) {
 			const childState = {
 				...state,
 				level: childLevel,
+				levelValue: childLevels.valueOf(childLevel),
 				levels: childLevels,
 				customLevels: childCustomLevels,
 				useOnlyCustomLevels: childUseOnlyCustomLevels,
@@ -1255,6 +1299,7 @@ function createLogger(state) {
 			const previousValue = state.levels.valueOf(previousLevel);
 			const newValue = state.levels.valueOf(level);
 			state.level = level;
+			state.levelValue = newValue;
 			if (previousLevel !== level) logger.emit("level-change", level, newValue, previousLevel, previousValue, logger);
 		},
 		get levelVal() {
@@ -1286,31 +1331,32 @@ function createLogger(state) {
 	if (state.useOnlyCustomLevels === true) for (const name of CORE_LEVEL_NAMES) delete logger[name];
 	if (state.customLevels !== void 0) {
 		const dynamic = logger;
-		for (const name of Object.keys(state.customLevels)) dynamic[name] = createLogMethod(state, name);
+		for (const name of Object.keys(state.customLevels)) dynamic[name] = createLogMethod(state, name, state.levels.valueOf(name));
 	}
 	return logger;
 }
-function createLogMethod(state, level) {
+function createLogMethod(state, level, levelValue) {
 	return function logMethod(objOrMsg, msg, ...args) {
-		if (!state.enabled || !state.levels.isEnabled(state.level, level)) return;
+		if (!state.enabled) return;
+		if (state.levels.isAsc ? levelValue < state.levelValue : !state.levels.isEnabled(state.level, level)) return;
 		const rawMethod = (nextObjOrMsg, nextMsg, ...nextArgs) => {
-			const record = buildRecord(state, level, nextObjOrMsg, nextMsg, nextArgs);
-			state.backend.write(formatJsonLine(record, state.encode), state.levels.valueOf(level));
+			const record = buildRecord(state, level, levelValue, nextObjOrMsg, nextMsg, nextArgs);
+			state.backend.write(formatJsonLine(record, state.encode), levelValue);
 		};
 		if (state.hooks?.logMethod !== void 0) {
 			state.hooks.logMethod.call(this, [
 				objOrMsg,
 				msg,
 				...args
-			].filter(trimTrailingUndefined), rawMethod, state.levels.valueOf(level));
+			].filter(trimTrailingUndefined), rawMethod, levelValue);
 			return;
 		}
 		rawMethod(objOrMsg, msg, ...args);
 	};
 }
-function buildRecord(state, level, objOrMsg, msg, args) {
+function buildRecord(state, level, levelValue, objOrMsg, msg, args) {
 	const record = {};
-	Object.assign(record, formatLevel(state, level));
+	Object.assign(record, formatLevel(state, level, levelValue));
 	const timeFields = createTimestampFields(state.timestamp);
 	Object.assign(record, timeFields);
 	Object.assign(record, formatBindings(state));
@@ -1363,8 +1409,7 @@ function mergeFormatters(parent, child) {
 		...child
 	};
 }
-function formatLevel(state, level) {
-	const value = state.levels.valueOf(level);
+function formatLevel(state, level, value) {
 	return state.formatters.level?.(level, value) ?? { level: value };
 }
 function formatBindings(state) {

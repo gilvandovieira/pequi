@@ -53,12 +53,19 @@ export function serializeErrorValues(record: Record<string, unknown>): Record<st
     return record;
   }
 
-  const next: Record<string, unknown> = {};
   const seen = new WeakMap<object, unknown>();
-  for (const [key, value] of Object.entries(record)) {
-    next[key] = serializeValue(value, seen);
+  let copy: Record<string, unknown> | null = null;
+  for (const key in record) {
+    const value = record[key];
+    const serialized = serializeValue(value, seen);
+    if (serialized !== value) {
+      if (copy === null) {
+        copy = { ...record };
+      }
+      copy[key] = serialized;
+    }
   }
-  return next;
+  return copy ?? record;
 }
 
 function hasComplexValue(record: Record<string, unknown>): boolean {
@@ -80,20 +87,30 @@ function serializeValue(value: unknown, seen: WeakMap<object, unknown>): unknown
     return value;
   }
 
-  // Returning the in-progress copy keeps cycles intact with consistent identities, so the JSON
-  // encoder renders them as "[Circular]" at the same depth Pino does instead of recursing forever.
+  // Copy-on-write: only allocate when a child actually changes (an Error gets serialized). The
+  // common no-Error record is returned untouched, and cycles are left intact for the encoder to
+  // render as "[Circular]". `seen` maps each object to whatever should replace it (itself until a
+  // copy is needed) so a cycle resolves consistently.
   const existing = seen.get(value);
   if (existing !== undefined) {
     return existing;
   }
 
   if (Array.isArray(value)) {
-    const result: unknown[] = [];
-    seen.set(value, result);
-    for (const item of value) {
-      result.push(serializeValue(item, seen));
+    seen.set(value, value);
+    let copy: unknown[] | null = null;
+    for (let index = 0; index < value.length; index++) {
+      const item = value[index];
+      const serialized = serializeValue(item, seen);
+      if (serialized !== item) {
+        if (copy === null) {
+          copy = value.slice();
+          seen.set(value, copy);
+        }
+        copy[index] = serialized;
+      }
     }
-    return result;
+    return copy ?? value;
   }
 
   // Only descend into plain objects. Dates, class instances, and other exotic objects are passed
@@ -102,12 +119,21 @@ function serializeValue(value: unknown, seen: WeakMap<object, unknown>): unknown
     return value;
   }
 
-  const next: Record<string, unknown> = {};
-  seen.set(value, next);
-  for (const [key, nested] of Object.entries(value)) {
-    next[key] = serializeValue(nested, seen);
+  seen.set(value, value);
+  let copy: Record<string, unknown> | null = null;
+  const source = value as Record<string, unknown>;
+  for (const key in source) {
+    const nested = source[key];
+    const serialized = serializeValue(nested, seen);
+    if (serialized !== nested) {
+      if (copy === null) {
+        copy = { ...source };
+        seen.set(value, copy);
+      }
+      copy[key] = serialized;
+    }
   }
-  return next;
+  return copy ?? value;
 }
 
 function isPlainObject(value: object): boolean {
@@ -123,15 +149,15 @@ export function applySerializers(
     return record;
   }
 
-  // Copy lazily: most records do not have a key matching a serializer, so avoid the spread until
-  // the first match actually requires mutating a copy.
+  // Iterate serializer keys with for-in (no Object.entries allocation) and copy lazily: most
+  // records do not have a key matching a serializer, so avoid the spread until the first match.
   let next = record;
-  for (const [key, serializer] of Object.entries(serializers)) {
+  for (const key in serializers) {
     if (Object.hasOwn(record, key)) {
       if (next === record) {
         next = { ...record };
       }
-      next[key] = serializer(next[key]);
+      next[key] = serializers[key](next[key]);
     }
   }
   return next;

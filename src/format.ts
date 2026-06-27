@@ -59,30 +59,35 @@ export function formatMessage(template: string, args: unknown[]): string {
     return template;
   }
 
-  let result = "";
-  let argIndex = 0;
-  let index = 0;
-
-  while (index < template.length) {
-    if (template[index] === "%" && index + 1 < template.length) {
-      const token = template[index + 1];
-      if (token === "%") {
-        result += "%";
-        index += 2;
-        continue;
-      }
-      if (argIndex < args.length && isFormatToken(token)) {
-        result += formatToken(token, args[argIndex]);
-        argIndex++;
-        index += 2;
-        continue;
-      }
-    }
-    result += template[index];
-    index++;
+  // Slice literal runs between `%` tokens instead of concatenating char-by-char.
+  let pct = template.indexOf("%");
+  if (pct === -1) {
+    return template;
   }
 
-  return result;
+  const limit = template.length - 1;
+  let result = "";
+  let argIndex = 0;
+  let last = 0;
+
+  while (pct !== -1 && pct < limit) {
+    const token = template[pct + 1];
+    if (token === "%") {
+      result += template.slice(last, pct) + "%";
+      last = pct + 2;
+    } else if (argIndex < args.length && isFormatToken(token)) {
+      result += template.slice(last, pct) + formatToken(token, args[argIndex]);
+      argIndex++;
+      last = pct + 2;
+    } else {
+      // Unknown token or no argument left: leave the `%` literal and keep scanning.
+      pct = template.indexOf("%", pct + 1);
+      continue;
+    }
+    pct = template.indexOf("%", last);
+  }
+
+  return last === 0 ? template : result + template.slice(last);
 }
 
 function isFormatToken(token: string): boolean {

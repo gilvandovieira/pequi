@@ -252,6 +252,25 @@ Acceptance criteria:
 - Bundle semantic equivalence remains green.
 - Benchmarks clearly show before/after deltas.
 
+Status — shipped:
+
+- Copy-on-write serializer pass (`src/serializers.ts`): `serializeErrorValues` and `serializeValue`
+  return the original record/object untouched unless an `Error` is actually serialized, removing the
+  full-record rebuild that every object-logging call previously paid. This was the dominant win.
+- Copy-on-write redaction (`src/redaction.ts`): only the containers along a matched path are copied,
+  so redaction stays mutation-safe now that the serializer pass no longer hands it a private deep
+  copy. `applySerializers` iterates with for-in (no `Object.entries` allocation).
+- Slice-based `formatMessage` (`src/format.ts`): scans with `indexOf`/`slice` runs instead of
+  per-character concatenation.
+- Baked numeric level gate (`src/logger.ts`, `src/levels.ts`): each method carries its level value
+  and the active threshold is cached on state, so the common ascending comparison is a single
+  numeric check instead of a registry call plus two `valueOf` lookups per log. The level value is
+  reused for `formatLevel`, hooks, and the backend write.
+- Result (bundle-runner, source vs v0.5): roughly +26% to +75% per case. Pequi is now faster than
+  Pino on the object-heavy paths (serializer, redaction, formatter, child bindings, mixin, bursts)
+  and much closer on the lightweight string paths (format-string 1.55x to 0.78x of Pino,
+  enabled-string to 0.87x). All 134 tests and bundle equivalence stay green.
+
 ## v0.7 — Native I/O Hardening
 
 Goal: judge and improve the Rust native backend on workloads where native can actually help.
