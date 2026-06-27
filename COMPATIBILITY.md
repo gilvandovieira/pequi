@@ -57,6 +57,32 @@ runtime API.
   `http` request/response internals, so faithful parity needs real
   `IncomingMessage`/`ServerResponse` fixtures rather than plain objects).
 
+## Bundle Equivalence
+
+The source implementation is the compatibility source of truth. The Rolldown bundle must produce
+equivalent output to source for the compatibility fixture suite and must not change Pino-compatible
+behavior.
+
+If bundled output diverges from source, the bundle export must be blocked until the divergence is
+fixed.
+
+Bundle compatibility checks include:
+
+- Source vs bundle simple message.
+- Object plus message.
+- Formatted message.
+- Error object.
+- Child logger.
+- Serializer.
+- Redaction.
+- Formatter.
+- Mixin.
+- `hooks.logMethod`.
+- `messageKey`.
+- `errorKey`.
+- `nestedKey`.
+- `timestamp: false`.
+
 ## Intentionally Different
 
 - Pino's Node worker transport model is not part of Pequi core.

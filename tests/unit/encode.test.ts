@@ -35,6 +35,15 @@ Deno.test("encoder follows JSON.stringify for special values", () => {
   assertEquals(safeStableStringify({ arr: [undefined, () => 1, 3] }), '{"arr":[null,null,3]}');
 });
 
+Deno.test("encoder handles nested arrays and objects like JSON.stringify", () => {
+  const value = {
+    matrix: [[1, 2], [3, [4, 5]]],
+    rows: [{ id: 1, tags: ["a", "b"] }, { id: 2, tags: [] }],
+    mixed: [null, [undefined, () => 1], { x: NaN }],
+  };
+  assertEquals(safeStableStringify(value), JSON.stringify(value));
+});
+
 Deno.test("encoder honors toJSON", () => {
   assertEquals(
     safeStableStringify({ d: { toJSON: () => ({ kept: true }) } }),

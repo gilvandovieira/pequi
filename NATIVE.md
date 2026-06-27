@@ -143,3 +143,36 @@ deno task bench:regression
 Native benchmarks measure write-heavy workloads: direct already-encoded writes, file writes, burst
 logging, flush cost, Pequi pure vs native, and Pequi native vs Pino under Deno. Disabled-level
 logging remains TypeScript-only and should not call native.
+
+## Native Performance Interpretation
+
+Native Rust currently accelerates write/flush behavior, not Pino API semantics. TypeScript still
+owns formatting, compatibility, serializers, redaction, hooks, child loggers, level checks, and JSON
+encoding.
+
+Every native write crosses Deno FFI. That per-line crossing has overhead, so native can lose in
+discard or memory microbenchmarks where there is little or no real I/O to amortize the call.
+
+Native is expected to matter for file sinks, buffered writes, burst logging, large batches, and
+flush behavior. Stdout and stderr benchmarks should be labeled separately as real-I/O workloads.
+
+Native benchmark reports must include the destination and workload, and the runner must verify that
+the native backend actually loaded. A clean `native: "auto"` fallback is correct behavior, but it
+must not be reported as native performance.
+
+## Bundled artifact native loading
+
+Bundling can change the meaning of `import.meta.url`. The source native loader resolves prebuilt
+libraries relative to `src/backends/native.ts`; a bundled artifact resolves from the generated
+bundle location instead.
+
+Normal source usage keeps the default `import.meta.url` resolution. Bundle investigation code may
+provide an explicit native library path so the benchmark can test the TypeScript layer after
+bundling without hardcoding dist-relative assumptions into the logger.
+
+Native bundle benchmarks must verify that the native backend actually loaded with
+`native: "required"` or backend diagnostics. A clean fallback in `native: "auto"` is correct runtime
+behavior, but it must not be reported as native performance.
+
+If a bundled native run cannot load the Rust library, mark the native bundled variant skipped or
+invalid and keep the pure bundled result separate.

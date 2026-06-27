@@ -234,7 +234,8 @@
   "workspace": {
     "dependencies": [
       "jsr:@std/assert@^1.0.14",
-      "npm:pino@10.3.1"
+      "npm:pino@10.3.1",
+      "npm:rolldown@1.1.2"
     ]
   }
 }

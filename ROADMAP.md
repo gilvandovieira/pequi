@@ -162,26 +162,137 @@ Carried over from `COMPATIBILITY.md` and not planned for the compatibility layer
 - Benchmark regression baseline.
 - Regression threshold script.
 
-## v0.5 — Linux ARM64 Release Hardening
+## v0.5 — Bundle Distribution Decision
 
-- `linux-aarch64-gnu` release build.
-- CI matrix.
-- Binary stripping.
-- Release artifact validation.
-- Memory stability tests.
+Goal: turn the Rolldown investigation into a stable distribution and CI policy.
 
-## v0.6 — Native Buffering Tuning
+Deliverables:
 
-- Tune default buffer sizing per destination.
-- Measure stdout, stderr, file, and discard overhead separately.
-- Add long-running flush and drop stress tests.
-- Keep disabled-level logging entirely TypeScript.
+- Keep `mod.ts` as the canonical source.
+- Add `dist/pequi.bundle.js` as the non-minified Rolldown bundle.
+- Keep source maps for the bundle.
+- Do not publish the minified bundle as the default artifact.
+- Add bundle semantic equivalence tests to CI.
+- Add bundle-vs-source benchmark regression tracking.
+- Add documentation explaining when to use `@pequi/log` versus `@pequi/log/bundle`.
+- Ensure the bundle has correct type support before exposing it through JSR.
+- Ensure bundle generation does not affect source TypeScript development.
 
-## v0.7 — Encoder Decision
+Acceptance criteria:
 
-- Benchmark TypeScript `JSON.stringify` plus Rust sink.
-- Benchmark possible Rust batch encoding.
-- Move encoding into Rust only if real benchmarks justify it.
+- `deno task bundle` creates `dist/pequi.bundle.js`.
+- Bundled output imports correctly under Deno.
+- Bundled output passes semantic equivalence tests against source.
+- Bundled output benchmark results can be generated.
+- Minified output is either removed from default tasks or marked experimental.
+- This roadmap clearly states that the bundle is optional.
+
+Decision: adopt the non-minified Rolldown bundle as an optional distribution artifact.
+
+Rationale:
+
+- The investigation showed a modest average speedup: about +6.5% for the non-minified bundle over
+  source TypeScript.
+- Semantic equivalence was verified against source output.
+- The minified bundle was less consistent, only about +4.8% on average, and hurts debuggability.
+- Source TypeScript remains canonical.
+- The remaining Pino gaps are algorithmic and require targeted optimization.
+- Native Rust should be evaluated on I/O workloads, not discard-sink microbenchmarks.
+
+Rejected:
+
+- Making the minified bundle default.
+- Replacing `mod.ts` with bundled JavaScript as the canonical source.
+- Claiming native is faster on all workloads.
+- Using discard/memory native microbenchmarks as native success criteria.
+
+## v0.6 — Pure TypeScript Pino Hot-Path Optimization
+
+Goal: close the main Pino performance gaps in the TypeScript API layer.
+
+Focus areas:
+
+- Disabled-level fast path.
+- Enabled-string fast path.
+- Format-string implementation.
+- Serializer overhead.
+- Redaction overhead.
+- Formatter overhead.
+- `hooks.logMethod` overhead.
+- Child logger binding overhead where measurable.
+
+Deliverables:
+
+- Add focused benchmark groups for each hot path.
+- Add regression thresholds for disabled-level and enabled-string paths.
+- Verify that every optimization preserves Pino compatibility tests.
+- Compare source, bundle, and Pino after every optimization.
+- Avoid optimizing only for one microbenchmark if it regresses structured logging.
+
+Acceptance criteria:
+
+- Disabled-level logging avoids object formatting, serializers, redaction, hooks, and backend
+  writes.
+- Enabled string logging has a dedicated fast path.
+- Serializer/redaction optimization does not mutate user input.
+- Pino compatibility tests remain green.
+- Bundle semantic equivalence remains green.
+- Benchmarks clearly show before/after deltas.
+
+## v0.7 — Native I/O Hardening
+
+Goal: judge and improve the Rust native backend on workloads where native can actually help.
+
+Focus areas:
+
+- File sink.
+- Buffered writes.
+- Burst logging.
+- Flush behavior.
+- Large batches.
+- Stdout/stderr only as separately labeled real-I/O benchmarks.
+
+Deliverables:
+
+- Stop treating discard/memory native microbenchmarks as primary native evidence.
+- Add native file-burst benchmarks.
+- Add native flush-after-burst benchmarks.
+- Add native buffered writer tuning.
+- Add native file correctness tests.
+- Add pure-vs-native output equivalence tests.
+- Add native fallback diagnostics.
+- Add documentation explaining FFI overhead.
+
+Acceptance criteria:
+
+- Native file-burst benchmark exists.
+- Native flush correctness test exists.
+- Native output matches pure TypeScript output for compatibility fixtures.
+- Native fallback cannot be mistaken for native performance.
+- `BENCHMARKS.md` explains why native may lose on per-line discard benchmarks.
+
+## v0.8 — Bundle And Native Release Hardening
+
+Goal: prepare source, bundle, and native paths for publishing and release.
+
+Deliverables:
+
+- Confirm JSR export shape.
+- Confirm bundle type support.
+- Confirm native optional behavior.
+- Confirm package excludes accidental current benchmark reports.
+- Confirm bundle and native docs are clear.
+- Confirm CI has source tests, bundle equivalence tests, benchmark smoke tests, and native tests
+  where available.
+
+Acceptance criteria:
+
+- `jsr.json` exports are correct.
+- `dist/pequi.bundle.js` is only exposed if type support is correct.
+- The minified bundle is not exported unless explicitly marked experimental.
+- Native Rust remains optional.
+- Normal users can import `@pequi/log` without native permissions.
+- Advanced users can import `@pequi/log/bundle` if the export is enabled.
 
 ## v1.0 — Stable Backend Logger
 

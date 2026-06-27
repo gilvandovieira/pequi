@@ -124,6 +124,15 @@ deno task bench:native:compare
 The native backend accelerates only write/flush sink work today. TypeScript still owns Pino
 compatibility and JSON encoding.
 
+## Bundle Artifact
+
+Pequi is authored in TypeScript and `mod.ts` remains the canonical entrypoint. A non-minified
+Rolldown bundle may be available at `@pequi/log/bundle` for users who want to test the bundled
+distribution path.
+
+The bundle is semantically checked against source. See [BENCHMARKS.md](./BENCHMARKS.md) for
+methodology and results.
+
 ## Development
 
 ```sh

@@ -4,6 +4,7 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
+    "./bundle": "./dist/pequi.bundle.js",
     "./pure": "./src/backends/pure.ts",
     "./native": "./src/backends/native.ts"
   },
@@ -11,6 +12,9 @@
     "include": [
       "mod.ts",
       "src/**/*.ts",
+      "dist/pequi.bundle.js",
+      "dist/pequi.bundle.js.map",
+      "dist/pequi.bundle.d.ts",
       "prebuilt/**",
       "README.md",
       "BENCHMARKS.md",

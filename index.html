@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pequi — Pino-compatible structured logging, built for Deno</title>
+    <meta
+      name="description"
+      content="Pequi is a Deno-first structured logger with a Pino-compatible API shape, oracle-tested behavior, safe JSON-line encoding, and an optional Rust sink for real I/O. Benchmarked against pino@10.3.1."
+    />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --bg-soft: #131418;
+        --panel: #16181d;
+        --line: #23262e;
+        --ink: #e9eaee;
+        --muted: #9aa0ad;
+        --faint: #6b7180;
+        --amber: #f6b73c;
+        --amber-soft: #f6b73c22;
+        --green: #5ec98a;
+        --red: #e2705f;
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--amber);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .wrap {
+        max-width: 1060px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      section {
+        padding: 72px 0;
+        border-top: 1px solid var(--line);
+      }
+      h2 {
+        font-size: 13px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--amber);
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      h3 {
+        font-size: clamp(24px, 3vw, 32px);
+        margin: 0 0 16px;
+        letter-spacing: -0.02em;
+        font-weight: 650;
+      }
+      p.lead {
+        color: var(--muted);
+        font-size: 17px;
+        max-width: 62ch;
+      }
+      .mono {
+        font-family: var(--mono);
+      }
+
+      /* hero */
+      header.hero {
+        position: relative;
+        padding: 96px 0 84px;
+        overflow: hidden;
+        background:
+          radial-gradient(1100px 420px at 78% -10%, #f6b73c14, transparent 60%),
+          linear-gradient(180deg, #0e0f13, var(--bg));
+      }
+      header.hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 46px 46px;
+        opacity: 0.18;
+        -webkit-mask-image: radial-gradient(900px 460px at 75% 0%, #000 30%, transparent 75%);
+        mask-image: radial-gradient(900px 460px at 75% 0%, #000 30%, transparent 75%);
+      }
+      .hero-grid {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 48px;
+        align-items: center;
+      }
+      @media (max-width: 860px) {
+        .hero-grid {
+          grid-template-columns: 1fr;
+          gap: 32px;
+        }
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        background: var(--bg-soft);
+        padding: 5px 11px;
+        border-radius: 999px;
+      }
+      .pill b {
+        color: var(--amber);
+        font-weight: 600;
+      }
+      .wordmark {
+        font-size: clamp(52px, 9vw, 92px);
+        font-weight: 720;
+        letter-spacing: -0.04em;
+        line-height: 0.95;
+        margin: 22px 0 10px;
+      }
+      .wordmark span {
+        color: var(--amber);
+      }
+      .tagline {
+        font-size: clamp(19px, 2.4vw, 24px);
+        color: var(--ink);
+        font-weight: 500;
+        margin: 0 0 18px;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        color: var(--muted);
+        max-width: 50ch;
+        margin: 0 0 28px;
+      }
+      .cta {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        font-size: 14.5px;
+        font-weight: 600;
+        padding: 11px 18px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        color: var(--ink);
+        background: var(--bg-soft);
+      }
+      .btn.primary {
+        background: var(--amber);
+        color: #14130c;
+        border-color: var(--amber);
+      }
+      .btn:hover {
+        text-decoration: none;
+        border-color: var(--amber);
+      }
+
+      .code {
+        background: #0a0b0e;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 24px 60px -30px #000;
+      }
+      .code .bar {
+        display: flex;
+        gap: 7px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        background: #101116;
+      }
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #2b2e36;
+      }
+      .code pre {
+        margin: 0;
+        padding: 18px 18px 20px;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.7;
+        color: #cfd3dc;
+        overflow-x: auto;
+      }
+      .t-key {
+        color: #7aa2f7;
+      }
+      .t-fn {
+        color: var(--amber);
+      }
+      .t-str {
+        color: #9ece6a;
+      }
+      .t-com {
+        color: var(--faint);
+      }
+      .t-pun {
+        color: #8b909c;
+      }
+
+      /* stats strip */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      @media (max-width: 720px) {
+        .stats {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      .stat {
+        background: var(--panel);
+        padding: 22px 20px;
+      }
+      .stat .n {
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .stat .n.amber {
+        color: var(--amber);
+      }
+      .stat .l {
+        color: var(--muted);
+        font-size: 13.5px;
+        margin-top: 2px;
+      }
+
+      /* features */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 36px;
+      }
+      @media (max-width: 860px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px;
+      }
+      .card .ic {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: var(--amber-soft);
+        border: 1px solid #f6b73c33;
+        display: grid;
+        place-items: center;
+        color: var(--amber);
+        font-family: var(--mono);
+        font-weight: 700;
+        margin-bottom: 14px;
+      }
+      .card h4 {
+        margin: 0 0 6px;
+        font-size: 16.5px;
+        letter-spacing: -0.01em;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      /* safety callout */
+      .safety {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        margin-top: 28px;
+      }
+      @media (max-width: 720px) {
+        .safety {
+          grid-template-columns: 1fr;
+        }
+      }
+      .safety > div {
+        background: #0a0b0e;
+        padding: 18px 20px;
+      }
+      .safety .h {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--faint);
+        margin-bottom: 10px;
+      }
+      .safety pre {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: #cfd3dc;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .bad {
+        color: var(--red);
+      }
+      .good {
+        color: var(--green);
+      }
+
+      /* benchmarks */
+      .bctrl {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin: 26px 0 10px;
+      }
+      .seg {
+        display: inline-flex;
+        background: var(--bg-soft);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 3px;
+      }
+      .seg button {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        background: transparent;
+        border: 0;
+        padding: 7px 13px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--amber);
+        color: #14130c;
+      }
+      .legend {
+        display: flex;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        vertical-align: -1px;
+        margin-right: 6px;
+      }
+      .legend .pq {
+        background: var(--amber);
+      }
+      .legend .pn {
+        background: #4a4f5b;
+      }
+
+      .bars {
+        margin-top: 8px;
+        display: grid;
+        gap: 9px;
+      }
+      .barrow {
+        display: grid;
+        grid-template-columns: 168px 1fr 92px;
+        gap: 14px;
+        align-items: center;
+      }
+      @media (max-width: 720px) {
+        .barrow {
+          grid-template-columns: 116px 1fr 72px;
+          gap: 9px;
+        }
+      }
+      .barrow .name {
+        font-size: 13px;
+        color: var(--ink);
+        font-family: var(--mono);
+      }
+      .track {
+        position: relative;
+        height: 26px;
+        background: #0a0b0e;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        overflow: hidden;
+      }
+      .seg2 {
+        position: absolute;
+        top: 0;
+        height: 50%;
+        display: flex;
+        align-items: center;
+      }
+      .seg2.pq {
+        top: 0;
+        background: linear-gradient(90deg, #f6b73c, #f6cd6e);
+      }
+      .seg2.pn {
+        top: 50%;
+        background: #444a57;
+      }
+      .seg2 span {
+        font-size: 10.5px;
+        font-family: var(--mono);
+        padding-left: 6px;
+        color: #0d0e11;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .seg2.pn span {
+        color: #e9eaee;
+      }
+      .verdict {
+        font-size: 12.5px;
+        font-family: var(--mono);
+        text-align: right;
+        font-weight: 600;
+      }
+      .verdict.win {
+        color: var(--green);
+      }
+      .verdict.par {
+        color: var(--muted);
+      }
+      .verdict.lose {
+        color: var(--faint);
+      }
+
+      table.data {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 24px;
+        font-size: 13px;
+      }
+      table.data th, table.data td {
+        text-align: right;
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--mono);
+      }
+      table.data th:first-child, table.data td:first-child {
+        text-align: left;
+      }
+      table.data thead th {
+        color: var(--faint);
+        font-weight: 600;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      table.data td.hi {
+        color: var(--amber);
+      }
+      .note {
+        color: var(--faint);
+        font-size: 13px;
+        margin-top: 14px;
+      }
+
+      .callgrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 26px;
+      }
+      @media (max-width: 720px) {
+        .callgrid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      footer {
+        padding: 48px 0 64px;
+        border-top: 1px solid var(--line);
+        color: var(--faint);
+        font-size: 13px;
+      }
+      footer code {
+        font-family: var(--mono);
+        color: var(--muted);
+        background: var(--bg-soft);
+        padding: 2px 6px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <span class="pill"
+          >Deno-first · <b>Pino-compatible</b> · oracle-tested vs pino@10.3.1</span>
+          <div class="wordmark">Peq<span>u</span>i</div>
+          <p class="tagline">Pino-compatible structured logging, built for Deno.</p>
+          <p class="sub">
+            A Deno-first structured logger with a Pino-compatible API shape, oracle-tested behavior,
+            safe JSON-line encoding, and an optional Rust sink for real I/O workloads.
+          </p>
+          <div class="cta">
+            <a class="btn primary" href="#benchmarks">See the benchmarks</a>
+            <a class="btn" href="#features">What's inside</a>
+          </div>
+        </div>
+        <div class="code" aria-hidden="true">
+          <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+          <pre><span class="t-com">// Pino-compatible API shape — same call signatures</span>
+<span class="t-key">import</span> pino <span class="t-key">from</span> <span class="t-str">"@pequi/log"</span><span class="t-pun">;</span>
+
+<span class="t-key">const</span> log <span class="t-pun">=</span> <span class="t-fn">pino</span><span class="t-pun">({</span> level<span class="t-pun">:</span> <span class="t-str">"info"</span><span class="t-pun">,</span> name<span class="t-pun">:</span> <span class="t-str">"api"</span> <span class="t-pun">});</span>
+
+log<span class="t-pun">.</span><span class="t-fn">info</span><span class="t-pun">({</span> userId<span class="t-pun">:</span> <span class="t-str">"123"</span> <span class="t-pun">},</span> <span class="t-str">"user logged in"</span><span class="t-pun">);</span>
+log<span class="t-pun">.</span><span class="t-fn">error</span><span class="t-pun">(</span><span class="t-key">new</span> <span class="t-fn">Error</span><span class="t-pun">(</span><span class="t-str">"boom"</span><span class="t-pun">),</span> <span class="t-str">"request failed"</span><span class="t-pun">);</span>
+
+<span class="t-com">// survives what crashes naive loggers</span>
+<span class="t-key">const</span> a <span class="t-pun">=</span> <span class="t-pun">{</span> id<span class="t-pun">:</span> <span class="t-str">1</span> <span class="t-pun">};</span> a<span class="t-pun">.</span>self <span class="t-pun">=</span> a<span class="t-pun">;</span>
+log<span class="t-pun">.</span><span class="t-fn">info</span><span class="t-pun">(</span>a<span class="t-pun">,</span> <span class="t-str">"circular"</span><span class="t-pun">);</span>  <span class="t-com">// → "self":"[Circular]"</span>
+</pre>
+        </div>
+      </div>
+    </header>
+
+    <section style="border-top: 0; padding-top: 40px">
+      <div class="wrap">
+        <div class="stats">
+          <div class="stat">
+            <div class="n amber">≈ par</div>
+            <div class="l">vs Pino on selected flat-object &amp; burst benchmarks</div>
+          </div>
+          <div class="stat">
+            <div class="n">134</div>
+            <div class="l">
+              tests · 0 failing (current <span class="mono">deno task test</span>)
+            </div>
+          </div>
+          <div class="stat">
+            <div class="n">0</div>
+            <div class="l">crashes on circular / BigInt / Date (tested)</div>
+          </div>
+          <div class="stat">
+            <div class="n amber">subset</div>
+            <div class="l">of Pino's API, covered by oracle tests</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>What's inside</h2>
+        <h3>A logger that follows Pino's API shape — and is honest about the rest.</h3>
+        <p class="lead">
+          The TypeScript layer owns argument normalization, serializers, redaction, formatting, and
+          JSON encoding. Every behavior below is checked against a pinned <span class="mono"
+          >pino@10.3.1</span> oracle.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <div class="ic">{ }</div>
+            <h4>Pino-shaped API</h4>
+            <p>
+              Factory forms, level methods, child loggers, bindings, <span class="mono"
+              >level-change</span> events, formatters, mixins, and <span class="mono"
+              >hooks.logMethod</span>.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ic">⌘</div>
+            <h4>Safe encoder</h4>
+            <p>
+              Circular refs become <span class="mono">"[Circular]"</span>, BigInt stays numeric,
+              Dates keep their ISO form. Bare <span class="mono">JSON.stringify</span> throws; Pequi
+              doesn't.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ic">±</div>
+            <h4>Custom levels</h4>
+            <p>
+              <span class="mono">customLevels</span>, <span class="mono">useOnlyCustomLevels</span>,
+              and ASC/DESC/custom <span class="mono">levelComparison</span> — generated per-level
+              methods, inherited by children.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ic">✳</div>
+            <h4>Real redaction</h4>
+            <p>
+              Wildcards (<span class="mono">a.*</span>, <span class="mono">*.secret</span>), array
+              &amp; bracket paths (<span class="mono">a[*].b</span>, <span class="mono"
+              >a["x.y"]</span>), <span class="mono">remove</span>, and array-path censors.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ic">⇉</div>
+            <h4>multistream &amp; onChild</h4>
+            <p>
+              Fan out to many destinations with per-stream levels and <span class="mono"
+              >dedupe</span>; a root <span class="mono">onChild</span> that fires for every
+              descendant.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ic">⚙</div>
+            <h4>Optional Rust sink</h4>
+            <p>
+              Pure TypeScript by default; <span class="mono">native: "auto"</span> loads a Rust
+              write/flush backend over FFI when it helps. The API never changes.
+            </p>
+          </div>
+        </div>
+
+        <div class="safety">
+          <div>
+            <div class="h">Naive JSON logger</div>
+            <pre>log.info(a, "circular")
+<span class="bad">→ TypeError: Converting circular
+   structure to JSON  (process down)</span>
+
+log.info({ big: 10n })
+<span class="bad">→ TypeError: Do not know how to
+   serialize a BigInt</span></pre>
+          </div>
+          <div>
+            <div class="h">Pequi</div>
+            <pre>log.info(a, "circular")
+<span class="good">→ {"level":30,"self":"[Circular]",
+   "msg":"circular"}</span>
+
+log.info({ big: 10n })
+<span class="good">→ {"level":30,"big":10}</span></pre>
+          </div>
+        </div>
+        <p class="note">
+          Insertion order is preserved at every level to match Pino's line output; <span
+            class="mono"
+          >toJSON</span>, non-finite numbers, and dropped <span class="mono"
+          >undefined</span>/function/symbol values all follow <span class="mono"
+          >JSON.stringify</span> semantics.
+        </p>
+      </div>
+    </section>
+
+    <section id="benchmarks">
+      <div class="wrap">
+        <h2>Benchmarks</h2>
+        <h3>Benchmarked against Pino — with the tradeoffs visible.</h3>
+        <p class="lead">
+          Throughput in <strong>million ops/sec</strong> (higher is better), mean of 3 independent
+          runs · 20,000 iterations/case · discard sink · 12th-gen i7-12700H · Deno 2.8.3 / V8
+          14.9. Across these selected cases Pequi is at parity or ahead on some flat-object and
+          high-volume benchmarks, and behind on string-formatting micro-paths.
+        </p>
+
+        <div class="bctrl">
+          <div class="seg" role="group" aria-label="Pequi variant">
+            <button data-v="src" aria-pressed="true">Source (TS)</button>
+            <button data-v="bun" aria-pressed="false">Bundled (Rolldown)</button>
+            <button data-v="natS" aria-pressed="false">Native (Rust)</button>
+          </div>
+          <div class="legend">
+            <span><i class="pq"></i>Pequi</span><span><i class="pn"></i>Pino 10.3.1</span>
+          </div>
+        </div>
+        <p class="note" id="variant-note"></p>
+        <div class="bars" id="bars"></div>
+        <p class="note">
+          Bars are normalized per row to the faster of the two. Verdict = Pequi vs Pino for the
+          selected variant. “par” = within ±10% (under the ~15% measurement-noise floor).
+        </p>
+
+        <table class="data" id="full">
+          <thead>
+            <tr>
+              <th>Case (M ops/sec)</th>
+              <th>Source</th>
+              <th>Bundled</th>
+              <th>Min*</th>
+              <th>Native</th>
+              <th>Pino</th>
+              <th>noise</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="note">
+          * <strong>Minified is experimental</strong> and not recommended — shown for reference
+          only, never treated as a product variant. Native targets file/buffered I/O; it is slower
+          than source on these discard-sink microbenchmarks by design.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Findings</h2>
+        <h3>Two experiments, honestly reported.</h3>
+        <div class="callgrid">
+          <div class="card">
+            <h4 style="color: var(--amber)">Rolldown bundling: a marginal win</h4>
+            <p>
+              Scope-hoisting the module graph buys roughly <strong>+3–7%</strong> on average —
+              but the per-case noise floor (~15% CV) is larger than the effect, so it's a small,
+              real, broadly-positive change, not a step function. Minification adds nothing
+              reliable. Output is verified byte-identical to source. <em>Ship the readable bundle;
+                skip minification.</em>
+            </p>
+          </div>
+          <div class="card">
+            <h4 style="color: var(--amber)">Rust native: only for real I/O</h4>
+            <p>
+              For these discard/memory micro-benchmarks the native FFI sink is <strong>~45%
+                slower</strong> — the per-write FFI crossing costs more than it saves. It reaches
+              parity only on file bursts. Native pays off for sustained buffered I/O, not per-line
+              micro-loops — so it's opt-in, never the default.
+            </p>
+          </div>
+        </div>
+        <p class="note">
+          Full methodology and per-case tables live in the repository at <span class="mono"
+          >reports/rolldown-bundle-investigation.md</span>.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <p style="color: var(--muted); max-width: 64ch">
+          Pequi is a Deno-first structured logger, planned for publication as <code
+          >@pequi/log</code>. Benchmarks are micro-benchmarks on a single machine and V8 build; only
+          relative deltas are meaningful, and the ~15% noise floor means individual rows are
+          indicative, not definitive.
+        </p>
+        <p>
+          Reproduce: <code>deno task bench:bundle:investigate</code> &nbsp;·&nbsp; Compat matrix:
+          <code>COMPATIBILITY.md</code> &nbsp;·&nbsp; Roadmap: <code>ROADMAP.md</code>
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      // Mean of 3 runs, ops/sec (raw). Variants: src, bun(bundled), min, natS(native), pino.
+      const DATA = [
+        {
+          name: "disabled-level-string",
+          src: 13.33e6,
+          bun: 19.13e6,
+          min: 17.27e6,
+          natS: 11.19e6,
+          pino: 38.54e6,
+          cv: 25,
+        },
+        {
+          name: "disabled-level-object",
+          src: 24.33e6,
+          bun: 21.50e6,
+          min: 16.57e6,
+          natS: 14.16e6,
+          pino: 35.96e6,
+          cv: 25,
+        },
+        {
+          name: "enabled-string",
+          src: 1.85e6,
+          bun: 1.67e6,
+          min: 1.79e6,
+          natS: 0.75e6,
+          pino: 3.04e6,
+          cv: 16,
+        },
+        {
+          name: "enabled-object-small",
+          src: 2.08e6,
+          bun: 2.10e6,
+          min: 1.96e6,
+          natS: 0.80e6,
+          pino: 2.04e6,
+          cv: 19,
+        },
+        {
+          name: "enabled-object-medium",
+          src: 0.70e6,
+          bun: 0.73e6,
+          min: 0.76e6,
+          natS: 0.46e6,
+          pino: 1.12e6,
+          cv: 14,
+        },
+        {
+          name: "format-string",
+          src: 0.98e6,
+          bun: 0.91e6,
+          min: 0.98e6,
+          natS: 0.61e6,
+          pino: 2.15e6,
+          cv: 29,
+        },
+        {
+          name: "error-object",
+          src: 0.0224e6,
+          bun: 0.0221e6,
+          min: 0.0223e6,
+          natS: 0.0225e6,
+          pino: 0.0229e6,
+          cv: 3,
+        },
+        {
+          name: "child-bindings",
+          src: 1.60e6,
+          bun: 1.73e6,
+          min: 1.58e6,
+          natS: 0.66e6,
+          pino: 2.08e6,
+          cv: 13,
+        },
+        {
+          name: "serializer",
+          src: 1.17e6,
+          bun: 1.12e6,
+          min: 1.24e6,
+          natS: 0.67e6,
+          pino: 2.41e6,
+          cv: 19,
+        },
+        {
+          name: "redaction",
+          src: 0.85e6,
+          bun: 0.82e6,
+          min: 0.86e6,
+          natS: 0.53e6,
+          pino: 0.88e6,
+          cv: 10,
+        },
+        {
+          name: "formatter-level",
+          src: 2.30e6,
+          bun: 2.63e6,
+          min: 2.63e6,
+          natS: 0.71e6,
+          pino: 4.10e6,
+          cv: 11,
+        },
+        {
+          name: "mixin",
+          src: 2.10e6,
+          bun: 2.28e6,
+          min: 2.36e6,
+          natS: 0.65e6,
+          pino: 2.72e6,
+          cv: 14,
+        },
+        {
+          name: "hooks-log-method",
+          src: 1.77e6,
+          bun: 1.93e6,
+          min: 2.15e6,
+          natS: 0.80e6,
+          pino: 2.74e6,
+          cv: 9,
+        },
+        {
+          name: "burst-1000",
+          src: 2.16e6,
+          bun: 2.34e6,
+          min: 2.36e6,
+          natS: 0.73e6,
+          pino: 2.32e6,
+          cv: 18,
+        },
+        {
+          name: "burst-10000",
+          src: 2.30e6,
+          bun: 2.30e6,
+          min: 2.23e6,
+          natS: 0.73e6,
+          pino: 2.16e6,
+          cv: 16,
+        },
+        {
+          name: "file-burst-1000",
+          src: 0.64e6,
+          bun: 0.60e6,
+          min: 0.69e6,
+          natS: 0.67e6,
+          pino: 0.66e6,
+          cv: 11,
+        },
+        {
+          name: "flush-after-1000",
+          src: 2.01e6,
+          bun: 1.96e6,
+          min: 2.20e6,
+          natS: 0.73e6,
+          pino: 2.33e6,
+          cv: 21,
+        },
+      ];
+      const M = (n) => (n / 1e6).toFixed(n < 0.1e6 ? 3 : 2);
+      let variant = "src";
+
+      function verdict(pq, pn) {
+        const d = (pq - pn) / pn * 100;
+        if (Math.abs(d) <= 10) return { cls: "par", txt: "≈ par" };
+        return d > 0
+          ? { cls: "win", txt: "+" + d.toFixed(0) + "%" }
+          : { cls: "lose", txt: d.toFixed(0) + "%" };
+      }
+      function renderBars() {
+        const el = document.getElementById("bars");
+        el.innerHTML = "";
+        for (const row of DATA) {
+          const pq = row[variant], pn = row.pino;
+          const max = Math.max(pq, pn);
+          const v = verdict(pq, pn);
+          const div = document.createElement("div");
+          div.className = "barrow";
+          div.innerHTML = '<div class="name">' + row.name + "</div>" +
+            '<div class="track">' +
+            '<div class="seg2 pq" style="width:' + (pq / max * 100) + '%"><span>' + M(pq) +
+            "</span></div>" +
+            '<div class="seg2 pn" style="width:' + (pn / max * 100) + '%"><span>' + M(pn) +
+            "</span></div>" +
+            "</div>" +
+            '<div class="verdict ' + v.cls + '">' + v.txt + "</div>";
+          el.appendChild(div);
+        }
+      }
+      function renderTable() {
+        const tb = document.querySelector("#full tbody");
+        tb.innerHTML = "";
+        for (const r of DATA) {
+          // "best" is only the better of the shippable variants (source/bundled); minified is
+          // experimental and rendered muted, never highlighted.
+          const best = Math.max(r.src, r.bun);
+          const cell = (val) =>
+            '<td class="' + (val === best ? "hi" : "") + '">' + M(val) + "</td>";
+          tb.insertAdjacentHTML(
+            "beforeend",
+            "<tr><td>" + r.name + "</td>" + cell(r.src) + cell(r.bun) +
+              '<td style="color:var(--faint)">' + M(r.min) + "</td>" +
+              "<td>" + M(r.natS) + "</td><td>" + M(r.pino) + "</td>" +
+              '<td style="color:var(--faint)">±' + r.cv + "%</td></tr>",
+          );
+        }
+      }
+      function renderNote() {
+        const note = document.getElementById("variant-note");
+        if (variant === "natS") {
+          note.style.color = "var(--red)";
+          note.textContent =
+            "⚠ Native targets file/buffered I/O, not discard-sink microbenchmarks — it is slower here by design. See the Findings section.";
+        } else if (variant === "bun") {
+          note.style.color = "var(--faint)";
+          note.textContent =
+            "Bundled = Rolldown, output verified identical to source; a marginal ~3–7% gain within the noise floor.";
+        } else {
+          note.style.color = "var(--faint)";
+          note.textContent = "Source = the published TypeScript running directly under Deno.";
+        }
+      }
+      document.querySelectorAll(".seg button").forEach((b) => {
+        b.addEventListener("click", () => {
+          document.querySelectorAll(".seg button").forEach((x) =>
+            x.setAttribute("aria-pressed", "false")
+          );
+          b.setAttribute("aria-pressed", "true");
+          variant = b.dataset.v;
+          renderBars();
+          renderNote();
+        });
+      });
+      renderBars();
+      renderTable();
+      renderNote();
+    </script>
+  </body>
+</html>

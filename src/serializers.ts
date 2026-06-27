@@ -47,12 +47,28 @@ export const stdSerializers = {
 } as const;
 
 export function serializeErrorValues(record: Record<string, unknown>): Record<string, unknown> {
+  // Fast path: with no object/array/Error values there is nothing to serialize, so skip the
+  // rebuild and WeakMap allocation entirely (the common string-message case).
+  if (!hasComplexValue(record)) {
+    return record;
+  }
+
   const next: Record<string, unknown> = {};
   const seen = new WeakMap<object, unknown>();
   for (const [key, value] of Object.entries(record)) {
     next[key] = serializeValue(value, seen);
   }
   return next;
+}
+
+function hasComplexValue(record: Record<string, unknown>): boolean {
+  for (const key in record) {
+    const value = record[key];
+    if (typeof value === "object" && value !== null) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function serializeValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
@@ -107,9 +123,14 @@ export function applySerializers(
     return record;
   }
 
-  const next = { ...record };
+  // Copy lazily: most records do not have a key matching a serializer, so avoid the spread until
+  // the first match actually requires mutating a copy.
+  let next = record;
   for (const [key, serializer] of Object.entries(serializers)) {
-    if (Object.hasOwn(next, key)) {
+    if (Object.hasOwn(record, key)) {
+      if (next === record) {
+        next = { ...record };
+      }
       next[key] = serializer(next[key]);
     }
   }

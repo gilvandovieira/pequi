@@ -1,2 +1,7 @@
 native/rust/target/
 *.log
+bench/**/*.log
+reports/*-current.json
+bench/reports/*-current.json
+dist/pequi.bundle.min.js
+dist/pequi.bundle.min.js.map
