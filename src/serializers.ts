@@ -1,17 +1,45 @@
+/**
+ * Error and value serializers.
+ *
+ * Provides the standard `err` serializer ({@linkcode stdSerializers}), recursive Error
+ * serialization, and the copy-on-write passes that apply user {@linkcode Serializers} and serialize
+ * nested Errors inside a log record without mutating the caller's objects.
+ *
+ * @module
+ */
+
 import type { Serializers } from "./types.ts";
 
+/** The plain-object shape an Error is serialized into. */
 export interface SerializedError {
+  /** The error's `name` (defaults to `"Error"`). */
   type: string;
+  /** The error's message. */
   message: string;
+  /** The stack trace, when present. */
   stack?: string;
+  /** The serialized `cause`, when present. */
   cause?: unknown;
+  /** Any additional own enumerable properties copied from the error. */
   [key: string]: unknown;
 }
 
+/**
+ * Type guard for `Error` instances.
+ *
+ * @param value Candidate value.
+ * @returns Whether `value` is an `Error`.
+ */
 export function isError(value: unknown): value is Error {
   return value instanceof Error;
 }
 
+/**
+ * Serialize an Error (and its `cause` chain) into a plain {@linkcode SerializedError} object.
+ *
+ * @param error The error to serialize.
+ * @returns A JSON-safe representation including own enumerable properties.
+ */
 export function serializeError(error: Error): SerializedError {
   const serialized: SerializedError = {
     type: error.name || "Error",
@@ -33,19 +61,42 @@ export function serializeError(error: Error): SerializedError {
   return serialized;
 }
 
+/**
+ * The standard `err` serializer: serialize Errors, pass other values through unchanged.
+ *
+ * @param value The value bound to an `err`/error key.
+ * @returns A {@linkcode SerializedError} for Errors, otherwise `value`.
+ */
 export function errSerializer(value: unknown): unknown {
   return isError(value) ? serializeError(value) : value;
 }
 
+/**
+ * Like {@linkcode errSerializer}; `serializeError` already follows the `cause` chain, so this is
+ * the `errWithCause` alias for Pino compatibility.
+ *
+ * @param value The value bound to an error key.
+ * @returns A {@linkcode SerializedError} for Errors, otherwise `value`.
+ */
 export function errWithCauseSerializer(value: unknown): unknown {
   return isError(value) ? serializeError(value) : value;
 }
 
+/** The built-in serializers exposed as `pequi.stdSerializers`. */
 export const stdSerializers = {
   err: errSerializer,
   errWithCause: errWithCauseSerializer,
 } as const;
 
+/**
+ * Serialize any Error values nested inside a log record, copy-on-write.
+ *
+ * Returns the original record untouched when nothing needs serializing (the common case); otherwise
+ * returns a copy with Errors replaced, leaving the caller's objects unmutated.
+ *
+ * @param record The log record to scan.
+ * @returns The record, or a copy with nested Errors serialized.
+ */
 export function serializeErrorValues(record: Record<string, unknown>): Record<string, unknown> {
   // Fast path: with no object/array/Error values there is nothing to serialize, so skip the
   // rebuild and WeakMap allocation entirely (the common string-message case).
@@ -141,6 +192,13 @@ function isPlainObject(value: object): boolean {
   return proto === Object.prototype || proto === null;
 }
 
+/**
+ * Apply user {@linkcode Serializers} to matching top-level keys of a record, copy-on-write.
+ *
+ * @param record The log record.
+ * @param serializers The configured serializers, or `undefined` for none.
+ * @returns The record, or a copy with matching keys transformed.
+ */
 export function applySerializers(
   record: Record<string, unknown>,
   serializers: Serializers | undefined,

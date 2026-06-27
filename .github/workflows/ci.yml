@@ -33,6 +33,11 @@ jobs:
       - name: Lint
         run: deno task lint
 
+      # Documentation gate (also enforced locally via the .githooks/pre-commit hook): every library
+      # module must have a module doc (100%) and at least 80% of exported symbols must have JSDoc.
+      - name: Doc coverage
+        run: deno task doc:coverage
+
       - name: Type-check
         run: deno task check
 

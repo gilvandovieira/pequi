@@ -1,3 +1,25 @@
+/**
+ * Pequi — a Deno-first structured logger with a Pino-compatible API shape.
+ *
+ * The default export and the named {@linkcode pequi} export are the same factory; {@linkcode pino}
+ * is provided as a drop-in alias. Logs are emitted as JSON lines. The pure TypeScript backend is
+ * the default; an optional Rust native sink can be selected with the `native` option.
+ *
+ * @example Basic usage
+ * ```ts
+ * import pino from "@pequi/log";
+ *
+ * const log = pino({ level: "info", name: "api" });
+ * log.info({ userId: "123" }, "user logged in");
+ * log.error(new Error("boom"), "request failed");
+ *
+ * const child = log.child({ module: "auth" });
+ * child.warn("token nearly expired");
+ * ```
+ *
+ * @module
+ */
+
 export {
   pequi,
   pequi as default,

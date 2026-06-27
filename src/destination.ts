@@ -1,3 +1,13 @@
+/**
+ * Destination descriptors and sinks.
+ *
+ * Provides the small factory helpers for built-in destinations (`stdout`, `stderr`, file, memory,
+ * discard) and {@linkcode createDestinationSink}, which turns a {@linkcode Destination} into a
+ * concrete write/flush/close {@linkcode DestinationSink} the backend drives.
+ *
+ * @module
+ */
+
 import type {
   ConfiguredDestination,
   Destination,
@@ -6,44 +16,81 @@ import type {
   WritableDestination,
 } from "./types.ts";
 
+/** The concrete write/flush/close sink a backend drives. */
 export interface DestinationSink {
+  /** Write one encoded line; `level` is forwarded for level-aware sinks (e.g. multistream). */
   write(chunk: string, level?: number): void;
+  /** Flush buffered output. */
   flush(): void | Promise<void>;
+  /** Release the sink. */
   close(): void | Promise<void>;
 }
 
 const encoder = new TextEncoder();
 
+/** Create a stdout destination descriptor. */
 export function stdoutDestination(): ConfiguredDestination {
   return { type: "stdout" };
 }
 
+/** Create a stderr destination descriptor. */
 export function stderrDestination(): ConfiguredDestination {
   return { type: "stderr" };
 }
 
+/**
+ * Create a file destination descriptor.
+ *
+ * @param path Filesystem path to write to.
+ * @param options Set `append: false` to truncate instead of append.
+ */
 export function fileDestination(path: string, options: { append?: boolean } = {}): FileDestination {
   return { type: "file", path, append: options.append };
 }
 
+/**
+ * Create an in-memory destination descriptor.
+ *
+ * @param lines Array that receives each encoded line; defaults to a new array.
+ */
 export function memoryDestination(lines: string[] = []): MemoryDestination {
   return { type: "memory", lines };
 }
 
+/** Create a discard destination descriptor (writes go nowhere). */
 export function discardDestination(): ConfiguredDestination {
   return { type: "discard" };
 }
 
+/**
+ * Type guard for a {@linkcode WritableDestination} (an object with a `write` method).
+ *
+ * @param value Candidate value.
+ */
 export function isWritableDestination(value: unknown): value is WritableDestination {
   return typeof value === "object" && value !== null &&
     typeof (value as { write?: unknown }).write === "function";
 }
 
+/**
+ * Type guard for a {@linkcode ConfiguredDestination} (an object with a string `type`).
+ *
+ * @param value Candidate value.
+ */
 export function isConfiguredDestination(value: unknown): value is ConfiguredDestination {
   return typeof value === "object" && value !== null &&
     typeof (value as { type?: unknown }).type === "string";
 }
 
+/**
+ * Resolve a Pino-style destination argument into a {@linkcode WritableDestination}.
+ *
+ * Accepts `undefined`/`1`/`"stdout"` (stdout), `2`/`"stderr"` (stderr), a string path (file), a
+ * custom writable, or a destination descriptor. Numeric file descriptors other than 1/2 throw.
+ *
+ * @param target The destination argument.
+ * @returns A writable destination.
+ */
 export function destination(target?: string | number | Destination): WritableDestination {
   if (target === undefined || target === 1 || target === "stdout") {
     return createDestinationSink(stdoutDestination());
@@ -68,6 +115,12 @@ export function destination(target?: string | number | Destination): WritableDes
   return createDestinationSink(target);
 }
 
+/**
+ * Build the concrete {@linkcode DestinationSink} for a destination.
+ *
+ * @param target A destination descriptor or custom writable; defaults to stdout.
+ * @returns The matching sink implementation.
+ */
 export function createDestinationSink(
   target: Destination = stdoutDestination(),
 ): DestinationSink {

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pequi pre-commit gate: documentation coverage.
+#
+# Enforces module-doc coverage (100%) and exported-symbol JSDoc coverage (80%) across the library
+# source. Enable once per clone with `deno task hooks:install` (sets core.hooksPath to .githooks).
+# Bypass in an emergency with `git commit --no-verify`.
+
+if ! command -v deno >/dev/null 2>&1; then
+  echo "pre-commit: deno not found on PATH; skipping doc-coverage gate." >&2
+  exit 0
+fi
+
+exec deno task doc:coverage

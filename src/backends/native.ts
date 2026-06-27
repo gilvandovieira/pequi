@@ -1,7 +1,20 @@
+/**
+ * The optional Rust native backend.
+ *
+ * Loads the prebuilt Rust `cdylib` through Deno FFI and exposes a {@linkcode Backend} whose
+ * write/flush path is handled in Rust. The TypeScript layer still owns all formatting, so this
+ * module only accepts already-encoded lines. Loading is lazy and platform-gated; in `native:
+ * "auto"` a load failure falls back to pure TypeScript. Available directly as the
+ * `@pequi/log/native` export.
+ *
+ * @module
+ */
+
 import { isConfiguredDestination } from "../destination.ts";
 import { NativeBackendUnavailable, PequiNativeError } from "../errors.ts";
 import type { Backend, Destination, NativeDiagnostics, NativeMode } from "../types.ts";
 
+/** The native ABI version this build requires; checked against `pequi_abi_version()`. */
 export const NATIVE_ABI_VERSION = 1;
 
 const supportedTargets = {
@@ -14,6 +27,7 @@ const rustTargetTriples = {
   "linux-aarch64": "aarch64-unknown-linux-gnu",
 } as const;
 
+/** The C ABI symbol table passed to `Deno.dlopen` (ABI {@linkcode NATIVE_ABI_VERSION}). */
 export const nativeSymbols = {
   pequi_abi_version: { parameters: [], result: "u32" },
   pequi_init: {
@@ -30,32 +44,51 @@ export const nativeSymbols = {
   pequi_drop: { parameters: ["pointer"], result: "void" },
 } as const satisfies Deno.ForeignLibraryInterface;
 
+/** The opened native dynamic library, typed by {@linkcode nativeSymbols}. */
 export type NativeLibrary = Deno.DynamicLibrary<typeof nativeSymbols>;
 type NativeHandle = Deno.PointerValue;
 
+/** Options for constructing a native backend. */
 export interface NativeBackendOptions {
+  /** Native mode (`"auto"` or `"required"`); `false` never reaches this module. */
   mode?: Exclude<NativeMode, false>;
+  /** Where the native sink writes. */
   destination?: Destination;
+  /** Line ending appended to each line. */
   lineEnding?: "\n" | "\r\n";
+  /** File buffer size in bytes; `0` disables buffering. */
   bufferSize?: number;
+  /** Explicit library path, overriding prebuilt resolution. */
   libraryPath?: string;
 }
 
+/** Where the loader looked and on what platform, regardless of whether loading succeeded. */
 export interface NativeLoadInfo {
+  /** Host operating system. */
   os: typeof Deno.build.os;
+  /** Host CPU architecture. */
   arch: typeof Deno.build.arch;
+  /** The resolved Pequi target name, or `undefined` if unsupported. */
   target: string | undefined;
+  /** Library paths attempted, in order. */
   attemptedLibraryPaths: string[];
 }
 
+/** A successfully opened native library, extending {@linkcode NativeLoadInfo} with the handle. */
 export interface LoadedNativeLibrary extends NativeLoadInfo {
+  /** The opened dynamic library. */
   library: NativeLibrary;
+  /** The path the library was loaded from. */
   libraryPath: string;
+  /** The ABI version the library reported. */
   abiVersion: number;
 }
 
+/** A constructed native backend together with its {@linkcode NativeDiagnostics}. */
 export interface NativeBackendCreation {
+  /** The native backend. */
   backend: Backend;
+  /** Diagnostics describing the load. */
   diagnostics: NativeDiagnostics;
 }
 
@@ -68,10 +101,12 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const emptyBuffer = new Uint8Array(0);
 
+/** Whether the current OS/architecture has a supported native target. */
 export function isNativePlatformSupported(): boolean {
   return resolveNativeTarget() !== undefined;
 }
 
+/** Resolve the Pequi target name for the current platform, or `undefined` if unsupported. */
 export function resolveNativeTarget(): string | undefined {
   if (Deno.build.os !== "linux") {
     return undefined;
@@ -81,6 +116,7 @@ export function resolveNativeTarget(): string | undefined {
   return supportedTargets[key as keyof typeof supportedTargets];
 }
 
+/** Resolve the prebuilt library path for the current platform, or `undefined` if unsupported. */
 export function resolveNativeLibraryPath(): string | undefined {
   const target = resolveNativeTarget();
   if (target === undefined) {
@@ -90,6 +126,13 @@ export function resolveNativeLibraryPath(): string | undefined {
   return urlPath(new URL(`../../prebuilt/${target}/libpequi_log.so`, import.meta.url));
 }
 
+/**
+ * List candidate library paths in load order: an explicit override, else the prebuilt path followed
+ * by local Rust `target/release` build outputs.
+ *
+ * @param libraryPath Optional explicit path; when given, it is the only candidate.
+ * @returns De-duplicated candidate paths.
+ */
 export function resolveNativeLibraryCandidates(libraryPath?: string): string[] {
   if (libraryPath !== undefined) {
     return [libraryPath];
@@ -120,6 +163,12 @@ export function resolveNativeLibraryCandidates(libraryPath?: string): string[] {
   return [...new Set(candidates)];
 }
 
+/**
+ * Collect platform and candidate-path information without attempting to load.
+ *
+ * @param libraryPath Optional explicit library path.
+ * @returns The {@linkcode NativeLoadInfo} for the current platform.
+ */
 export function getNativeLoadInfo(libraryPath?: string): NativeLoadInfo {
   return {
     os: Deno.build.os,
@@ -129,6 +178,14 @@ export function getNativeLoadInfo(libraryPath?: string): NativeLoadInfo {
   };
 }
 
+/**
+ * Open the native library, trying each candidate path and validating the ABI version.
+ *
+ * @param libraryPath Optional explicit library path.
+ * @param requestedMode The native mode, used for error context.
+ * @returns The loaded library and its load info.
+ * @throws {NativeBackendUnavailable} If no candidate loads with a matching ABI.
+ */
 export function loadNativeLibrary(
   libraryPath?: string,
   requestedMode: NativeMode = "required",
@@ -199,6 +256,13 @@ export function loadNativeLibrary(
   );
 }
 
+/**
+ * Try to create a native backend, returning `undefined` instead of throwing in `"auto"` mode.
+ *
+ * @param options Native backend options.
+ * @returns The native backend, or `undefined` when unavailable in `"auto"` mode.
+ * @throws The load error when `mode` is `"required"`.
+ */
 export function tryCreateNativeBackend(options: NativeBackendOptions = {}): Backend | undefined {
   const mode = options.mode ?? "auto";
   try {
@@ -211,10 +275,24 @@ export function tryCreateNativeBackend(options: NativeBackendOptions = {}): Back
   }
 }
 
+/**
+ * Create a native backend, discarding diagnostics.
+ *
+ * @param options Native backend options.
+ * @returns The native backend.
+ * @throws {NativeBackendUnavailable} If the library cannot be loaded or initialized.
+ */
 export function createNativeBackend(options: NativeBackendOptions = {}): Backend {
   return createNativeBackendResult(options).backend;
 }
 
+/**
+ * Create a native backend and return it with {@linkcode NativeDiagnostics}.
+ *
+ * @param options Native backend options.
+ * @returns The backend and diagnostics.
+ * @throws {NativeBackendUnavailable} If the library cannot be loaded or initialized.
+ */
 export function createNativeBackendResult(
   options: NativeBackendOptions = {},
 ): NativeBackendCreation {
@@ -286,6 +364,11 @@ export function createNativeBackendResult(
   };
 }
 
+/**
+ * Whether a backend is the native {@linkcode NativeBackend} (as opposed to the pure backend).
+ *
+ * @param backend The backend to test.
+ */
 export function isNativeBackend(backend: Backend): boolean {
   return backend instanceof NativeBackend;
 }
@@ -363,6 +446,14 @@ function normalizeBufferSize(
   return bufferSize;
 }
 
+/**
+ * A {@linkcode Backend} backed by the Rust native sink over FFI.
+ *
+ * Encodes each line to UTF-8 and forwards it to `pequi_write`; {@linkcode NativeBackend.flush} and
+ * {@linkcode NativeBackend.close} map to `pequi_flush` and `pequi_drop`. After close, further
+ * writes throw {@linkcode PequiNativeError}. Construct it through {@linkcode createNativeBackend}
+ * rather than directly.
+ */
 export class NativeBackend implements Backend {
   readonly #library: NativeLibrary;
   readonly #handle: NativeHandle;

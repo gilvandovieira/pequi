@@ -1,12 +1,26 @@
+/**
+ * Multi-destination fan-out.
+ *
+ * {@linkcode multistream} mirrors `pino.multistream`: it routes one logger's output to several
+ * destinations, each filtered by its own level, with optional `dedupe` to send each line to a
+ * single stream.
+ *
+ * @module
+ */
+
 import { levelToNumber } from "./levels.ts";
 import { isWritableDestination } from "./destination.ts";
 import type { LogLevel, WritableDestination } from "./types.ts";
 
+/** One destination in a {@linkcode multistream}, with its own minimum level. */
 export interface MultistreamEntry {
+  /** Minimum level for this stream; defaults to the multistream's default level. */
   level?: LogLevel | number;
+  /** The destination sink. */
   stream: WritableDestination;
 }
 
+/** Options for {@linkcode multistream}. */
 export interface MultistreamOptions {
   /** Default level for entries that do not specify one. Defaults to `"info"`. */
   level?: LogLevel | number;
@@ -19,10 +33,13 @@ interface ResolvedStream {
   stream: WritableDestination;
 }
 
+/** The destination returned by {@linkcode multistream}; pass it as a logger's `destination`. */
 export interface MultiStreamDestination extends WritableDestination {
   /** Set by the logger before each write so the multistream knows the line's level. */
   lastLevel: number;
+  /** Add another stream after construction; returns `this` for chaining. */
   add(entry: MultistreamEntry | WritableDestination): MultiStreamDestination;
+  /** The resolved streams and their levels. */
   readonly streams: ResolvedStream[];
 }
 

@@ -50,6 +50,8 @@
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
     "lint": "deno lint",
+    "doc:coverage": "deno run --allow-read --allow-run --allow-env scripts/doc-coverage.ts",
+    "hooks:install": "git config core.hooksPath .githooks",
     "native:build": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts",
     "native:build:x64": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts --target linux-x86_64-gnu",
     "native:build:aarch64": "deno run --allow-run --allow-read --allow-write --allow-env=HOME,CARGO scripts/build-native.ts --target linux-aarch64-gnu",
